@@ -18,6 +18,18 @@ pub struct VideoEntry {
     pub thumbnail_url: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct SearchEntry {
+    pub relative_path: PathBuf,
+    pub kind: SearchEntryKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchEntryKind {
+    Folder,
+    Video,
+}
+
 #[derive(Debug)]
 pub enum ResolveError {
     PathTraversal,
@@ -131,6 +143,71 @@ pub fn scan_directory(
     videos.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
 
     Ok((folders, videos))
+}
+
+pub fn search_paths(media_root: &Path, query: &str) -> std::io::Result<Vec<SearchEntry>> {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let query_lower = trimmed.to_lowercase();
+    let mut matches = Vec::new();
+    let mut root_relative = PathBuf::new();
+    search_paths_inner(media_root, media_root, &mut root_relative, &query_lower, &mut matches)?;
+
+    matches.sort_by(|a, b| {
+        let left = a.relative_path.to_string_lossy().to_lowercase();
+        let right = b.relative_path.to_string_lossy().to_lowercase();
+        left.cmp(&right)
+    });
+
+    Ok(matches)
+}
+
+fn search_paths_inner(
+    media_root: &Path,
+    absolute_dir: &Path,
+    relative_dir: &mut PathBuf,
+    query_lower: &str,
+    matches: &mut Vec<SearchEntry>,
+) -> std::io::Result<()> {
+    for entry_result in std::fs::read_dir(absolute_dir)? {
+        let entry = entry_result?;
+        let file_name = entry.file_name();
+        let path = entry.path();
+
+        relative_dir.push(&file_name);
+        let relative_path = relative_dir.clone();
+        let relative_text = relative_path.to_string_lossy().to_lowercase();
+
+        if path.is_dir() {
+            if relative_text.contains(query_lower) {
+                matches.push(SearchEntry {
+                    relative_path: relative_path.clone(),
+                    kind: SearchEntryKind::Folder,
+                });
+            }
+
+            // Recurse through all folders to support searching the entire media root.
+            if let Err(err) = search_paths_inner(media_root, &path, relative_dir, query_lower, matches) {
+                relative_dir.pop();
+                return Err(err);
+            }
+        } else if path.is_file() && is_supported_video_file(&path) {
+            if relative_text.contains(query_lower) {
+                matches.push(SearchEntry {
+                    relative_path,
+                    kind: SearchEntryKind::Video,
+                });
+            }
+        }
+
+        relative_dir.pop();
+    }
+
+    let _ = media_root;
+    Ok(())
 }
 
 pub fn encode_url_path(path: &Path) -> String {

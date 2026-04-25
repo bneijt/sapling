@@ -1580,6 +1580,7 @@ dependencies = [
  "md5",
  "percent-encoding",
  "png",
+ "serde",
  "tokio",
  "tower-http",
  "url",

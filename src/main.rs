@@ -6,16 +6,18 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::get;
 use axum::Router;
 use clap::Parser;
+use serde::Deserialize;
 use tower_http::services::ServeDir;
 
 use crate::media::{
-    encode_url_path, format_breadcrumbs, resolve_directory, resolve_video_file, scan_directory, ResolveError,
+    encode_url_path, format_breadcrumbs, resolve_directory, resolve_video_file, scan_directory, search_paths,
+    ResolveError,
 };
 use crate::thumbnail::valid_thumbnail_path_for_video;
 
@@ -34,6 +36,11 @@ struct Cli {
 #[derive(Clone)]
 struct AppState {
     media_root: Arc<PathBuf>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct BrowseQuery {
+    q: Option<String>,
 }
 
 #[tokio::main]
@@ -71,11 +78,35 @@ async fn root() -> Redirect {
     Redirect::to("/browse/")
 }
 
-async fn browse_root(State(state): State<AppState>) -> Response {
-    browse(State(state), Path(String::new())).await
+async fn browse_root(State(state): State<AppState>, Query(query): Query<BrowseQuery>) -> Response {
+    browse_impl(state, String::new(), query).await
 }
 
-async fn browse(State(state): State<AppState>, Path(path): Path<String>) -> Response {
+async fn browse(
+    State(state): State<AppState>,
+    Path(path): Path<String>,
+    Query(query): Query<BrowseQuery>,
+) -> Response {
+    browse_impl(state, path, query).await
+}
+
+async fn browse_impl(state: AppState, path: String, query: BrowseQuery) -> Response {
+    let search_query = query.q.as_deref().unwrap_or_default().trim().to_string();
+    if !search_query.is_empty() {
+        return match search_paths(state.media_root.as_ref(), &search_query) {
+            Ok(results) => (
+                StatusCode::OK,
+                Html(ui::render_search_results_page(&search_query, &results)),
+            )
+                .into_response(),
+            Err(err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(ui::render_not_found(format!("Could not run search: {}", err))),
+            )
+                .into_response(),
+        };
+    }
+
     let (absolute, relative) = match resolve_directory(state.media_root.as_ref(), &path) {
         Ok(values) => values,
         Err(err) => return render_path_error(err),
@@ -93,7 +124,11 @@ async fn browse(State(state): State<AppState>, Path(path): Path<String>) -> Resp
     };
 
     let breadcrumbs = format_breadcrumbs(&relative);
-    (StatusCode::OK, Html(ui::render_browse_page(&breadcrumbs, &folders, &videos))).into_response()
+    (
+        StatusCode::OK,
+        Html(ui::render_browse_page(&breadcrumbs, &folders, &videos)),
+    )
+        .into_response()
 }
 
 async fn video_thumbnail(State(state): State<AppState>, Path(path): Path<String>) -> Response {

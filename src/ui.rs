@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::media::{encode_url_path, FolderEntry, VideoEntry};
+use crate::media::{encode_url_path, FolderEntry, SearchEntry, SearchEntryKind, VideoEntry};
 
 const STYLE: &str = r#"
 :root {
@@ -57,6 +57,33 @@ a { color: inherit; text-decoration: none; }
     display: flex;
     flex-wrap: wrap;
     gap: 0.45rem;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    min-width: min(56vw, 520px);
+}
+
+.search-form {
+    margin: 0;
+    width: min(420px, 100%);
+}
+
+.search-input {
+    width: 100%;
+    height: 2.1rem;
+    border: 1px solid var(--line);
+    background: #ffffff;
+    color: var(--ink);
+    padding: 0 0.7rem;
+    font: inherit;
+}
+
+.search-input:focus {
+    outline: 2px solid #c7d2fe;
+    outline-offset: 0;
 }
 
 .grid {
@@ -146,13 +173,70 @@ video {
     color: var(--ink);
 }
 
+.results {
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+}
+
+.results-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.86rem;
+}
+
+.results-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.results-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.72rem 1rem;
+    border-top: 1px solid #eceff3;
+}
+
+.results-row:first-child {
+    border-top: none;
+}
+
+.results-kind {
+    color: var(--muted);
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+.results-path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.results-empty {
+    padding: 1rem;
+    color: var(--muted);
+}
+
 @media (max-width: 640px) {
     .header { flex-direction: column; align-items: flex-start; }
+    .header-right { width: 100%; min-width: 0; flex-direction: column; align-items: stretch; }
+    .search-form { width: 100%; }
     .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 }
 "#;
 
-fn page_shell(title: &'static str, path: String, content: impl IntoView + 'static) -> String {
+fn page_shell(
+    title: &'static str,
+    path: String,
+    search_query: String,
+    content: impl IntoView + 'static,
+) -> String {
     let html = view! {
         <html lang="en">
             <head>
@@ -165,7 +249,18 @@ fn page_shell(title: &'static str, path: String, content: impl IntoView + 'stati
                 <main class="app">
                     <header class="header">
                         <h1>"Sapling Media"</h1>
-                        <div class="path">{path}</div>
+                        <div class="header-right">
+                            <div class="path">{path}</div>
+                            <form class="search-form" action="/browse/" method="get">
+                                <input
+                                    class="search-input"
+                                    type="search"
+                                    name="q"
+                                    placeholder="Search all paths"
+                                    value=search_query
+                                />
+                            </form>
+                        </div>
                     </header>
                     {content}
                 </main>
@@ -247,9 +342,56 @@ pub fn render_browse_page(
     page_shell(
         "Sapling Media",
         String::new(),
+        String::new(),
         view! {
             <section class="helper">{breadcrumb_view}</section>
             <section class="grid">{folder_cards}{video_cards}</section>
+        },
+    )
+}
+
+pub fn render_search_results_page(query: &str, entries: &[SearchEntry]) -> String {
+    let listing = if entries.is_empty() {
+        view! { <div class="results-empty">"No matches found."</div> }.into_any()
+    } else {
+        entries
+            .iter()
+            .map(|entry| {
+                let href = match entry.kind {
+                    SearchEntryKind::Folder => {
+                        format!("/browse/{}", encode_url_path(&entry.relative_path))
+                    }
+                    SearchEntryKind::Video => format!("/play/{}", encode_url_path(&entry.relative_path)),
+                };
+                let kind = match entry.kind {
+                    SearchEntryKind::Folder => "Folder",
+                    SearchEntryKind::Video => "Video",
+                };
+
+                view! {
+                    <li class="results-row">
+                        <a class="results-path" href=href>{entry.relative_path.to_string_lossy().to_string()}</a>
+                        <span class="results-kind">{kind}</span>
+                    </li>
+                }
+            })
+            .collect_view()
+            .into_any()
+    };
+
+    page_shell(
+        "Search Results",
+        format!("Search: {}", query),
+        query.to_string(),
+        view! {
+            <section class="results">
+                <div class="results-header">{format!("{} match(es)", entries.len())}</div>
+                {if entries.is_empty() {
+                    listing
+                } else {
+                    view! { <ol class="results-list">{listing}</ol> }.into_any()
+                }}
+            </section>
         },
     )
 }
@@ -258,6 +400,7 @@ pub fn render_video_page(display_name: String, media_src: String, parent_href: S
     page_shell(
         "Now Playing",
         display_name.clone(),
+        String::new(),
         view! {
             <section class="video-wrap">
                 <a class="cta" href=parent_href>
@@ -278,6 +421,7 @@ pub fn render_not_found(message: String) -> String {
     page_shell(
         "Not Found",
         "Error".to_string(),
+        String::new(),
         view! {
             <section class="helper">
                 <h2>"Not found"</h2>
