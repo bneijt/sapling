@@ -23,7 +23,7 @@ body {
 
 body {
     margin: 0;
-    font-family: "Atkinson Hyperlegible", "Trebuchet MS", sans-serif;
+    font-family: "Inter", sans-serif;
     color: var(--ink);
     background: var(--bg);
 }
