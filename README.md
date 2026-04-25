@@ -1,4 +1,5 @@
 # Sapling: small media server
 
-Simple, HTML5, read-only.
+Simple, video hosting.
+
 
