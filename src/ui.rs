@@ -6,113 +6,138 @@ const STYLE: &str = r#"
 :root {
   color-scheme: light;
   --surface: #f3efe9;
-  --panel: #fffdf8;
-  --ink: #1f2a2f;
-  --accent: #246a73;
-  --muted: #6b7d83;
-  --line: #d8d0c7;
-}
+    --bg-0: #4d4d4d;
+    --bg-1: #3c3c3c;
+    --bg-2: #2f2f2f;
+    --panel: #5a5a5a;
+    --panel-hover: #666666;
+    --ink: #f2f2f2;
+    --muted: #c3c3c3;
+    --line: #707070;
 * { box-sizing: border-box; }
 body {
+html {
+    min-height: 100%;
+    background: linear-gradient(180deg, var(--bg-0), var(--bg-1) 18%, var(--bg-2));
+}
   margin: 0;
   font-family: "Atkinson Hyperlegible", "Trebuchet MS", sans-serif;
   color: var(--ink);
   background: radial-gradient(circle at top left, #fef8ef, #e4ecef 55%, #d7e3e7);
-}
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 18%),
+        repeating-linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.015) 0,
+            rgba(255, 255, 255, 0.015) 1px,
+            transparent 1px,
+            transparent 32px
+        ),
+        linear-gradient(180deg, var(--bg-0), var(--bg-1) 18%, var(--bg-2));
 a { color: inherit; text-decoration: none; }
 .shell {
-  width: min(1100px, 96vw);
-  margin: 1.5rem auto;
-  background: color-mix(in srgb, var(--panel) 90%, white);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: 0 12px 30px rgba(10, 30, 40, 0.08);
-  overflow: hidden;
-}
+.app {
+    min-height: 100vh;
 .header {
   padding: 1rem 1.2rem;
-  border-bottom: 1px solid var(--line);
-  display: flex;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #606060, #505050);
   gap: 1rem;
   align-items: center;
   justify-content: space-between;
 }
 .header h1 { margin: 0; font-size: clamp(1.2rem, 1.5vw, 1.6rem); }
-.path {
+.header h1 {
+    margin: 0;
+    font-size: clamp(1rem, 1.3vw, 1.35rem);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
   color: var(--muted);
   font-size: 0.95rem;
-  display: flex;
+    font-size: 0.88rem;
   flex-wrap: wrap;
   gap: 0.45rem;
 }
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 0.9rem;
-  padding: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+}
+.grid:empty {
+    border-bottom: none;
 }
 .card {
   display: block;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #ffffffd8;
+    background: linear-gradient(180deg, #5d5d5d, #535353);
   overflow: hidden;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+    min-width: 0;
+    transition: background 0.18s ease;
 }
 .card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 18px rgba(25, 38, 49, 0.14);
+    background: linear-gradient(180deg, #6a6a6a, #5b5b5b);
 }
 .thumb {
   width: 100%;
-  height: 132px;
+    aspect-ratio: 16 / 9;
   object-fit: cover;
   display: block;
-  background: linear-gradient(135deg, #dae4e8, #f7efe5);
+    background: linear-gradient(135deg, #6c6c6c, #4d4d4d);
 }
 .thumb.placeholder {
   display: grid;
   place-items: center;
   color: var(--muted);
   font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
 }
-.meta { padding: 0.7rem; }
+.meta {
+    padding: 0.65rem 0.8rem 0.8rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
 .meta h3 {
   margin: 0 0 0.3rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 0.95rem;
+    font-size: 0.9rem;
+    font-weight: 700;
 }
 .meta p {
   margin: 0;
   color: var(--muted);
-  font-size: 0.8rem;
+    font-size: 0.76rem;
 }
 .video-wrap {
-  padding: 1rem;
+    padding: 0.8rem 1rem;
 }
 video {
   width: 100%;
-  max-height: min(76vh, 800px);
-  border-radius: 12px;
-  border: 1px solid var(--line);
+    max-height: calc(100vh - 8rem);
   background: #000;
 }
 .helper {
-  padding: 1rem;
+    padding: 0.8rem 1rem;
   color: var(--muted);
+    background: rgba(0, 0, 0, 0.08);
 }
 .cta {
     display: inline-block;
-    padding: 0.55rem 0.9rem;
+    padding: 0.5rem 0.85rem;
     border: 1px solid var(--line);
-    border-radius: 999px;
-    background: #fff;
+    background: linear-gradient(180deg, #676767, #585858);
     font-weight: 700;
+    color: var(--ink);
 }
 @media (max-width: 640px) {
   .header { flex-direction: column; align-items: flex-start; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 }
 "#;
 
@@ -126,7 +151,7 @@ fn page_shell(title: &'static str, path: String, content: impl IntoView + 'stati
                 <style>{STYLE}</style>
             </head>
             <body>
-                <main class="shell">
+                <main class="app">
                     <header class="header">
                         <h1>"Sapling Media"</h1>
                         <div class="path">{path}</div>

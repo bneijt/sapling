@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-exec cargo run -- "$@"
+mkdir -p tmp
+exec cargo run -- --media-root tmp "$@"

@@ -50,6 +50,7 @@ async fn main() -> anyhow::Result<()> {
     let media_service = ServeDir::new(media_root);
     let app = Router::new()
         .route("/", get(root))
+        .route("/browse/", get(browse_root))
         .route("/browse/{*path}", get(browse))
         .route("/play/{*path}", get(play))
         .nest_service("/media", media_service)
@@ -65,6 +66,10 @@ async fn main() -> anyhow::Result<()> {
 
 async fn root() -> Redirect {
     Redirect::to("/browse/")
+}
+
+async fn browse_root(State(state): State<AppState>) -> Response {
+    browse(State(state), Path(String::new())).await
 }
 
 async fn browse(State(state): State<AppState>, Path(path): Path<String>) -> Response {
