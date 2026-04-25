@@ -129,7 +129,9 @@ pub fn scan_directory(
             });
         } else if path.is_file() && is_supported_video_file(&path) {
             let video_relative_path = relative_dir.join(entry.file_name());
-            let thumbnail_url = if thumbnail::valid_thumbnail_path_for_video(media_root, &video_relative_path).is_some() {
+            let thumbnail_url = if thumbnail::get_or_generate_thumbnail_path_for_video(media_root, &video_relative_path)
+                .is_some()
+            {
                 Some(format!("/thumb/video/{}", encode_url_path(&video_relative_path)))
             } else {
                 None

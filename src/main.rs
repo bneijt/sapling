@@ -19,7 +19,7 @@ use crate::media::{
     encode_url_path, format_breadcrumbs, resolve_directory, resolve_video_file, scan_directory, search_paths,
     ResolveError,
 };
-use crate::thumbnail::valid_thumbnail_path_for_video;
+use crate::thumbnail::get_or_generate_thumbnail_path_for_video;
 
 #[derive(Debug, Parser)]
 #[command(name = "sapling")]
@@ -137,7 +137,7 @@ async fn video_thumbnail(State(state): State<AppState>, Path(path): Path<String>
         Err(err) => return render_path_error(err),
     };
 
-    let thumbnail_path = match valid_thumbnail_path_for_video(state.media_root.as_ref(), &relative) {
+    let thumbnail_path = match get_or_generate_thumbnail_path_for_video(state.media_root.as_ref(), &relative) {
         Some(path) => path,
         None => return (StatusCode::NOT_FOUND, "Thumbnail not found").into_response(),
     };
