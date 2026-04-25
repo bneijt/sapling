@@ -110,6 +110,10 @@ pub fn scan_directory(
         let file_name = entry.file_name().to_string_lossy().to_string();
 
         if path.is_dir() {
+            if directory_is_empty(&path)? {
+                continue;
+            }
+
             let folder_relative_path = relative_dir.join(&file_name);
             let thumbnail = path.join("folder.jpg");
             let thumbnail_relative_path = if thumbnail.is_file() {
@@ -182,7 +186,7 @@ fn search_paths_inner(
         let relative_text = relative_path.to_string_lossy().to_lowercase();
 
         if path.is_dir() {
-            if relative_text.contains(query_lower) {
+            if !directory_is_empty(&path)? && relative_text.contains(query_lower) {
                 matches.push(SearchEntry {
                     relative_path: relative_path.clone(),
                     kind: SearchEntryKind::Folder,
@@ -236,4 +240,8 @@ fn is_supported_video_file(path: &Path) -> bool {
         .and_then(|ext| ext.to_str())
         .map(|ext| SUPPORTED_VIDEO_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
         .unwrap_or(false)
+}
+
+fn directory_is_empty(path: &Path) -> std::io::Result<bool> {
+    Ok(std::fs::read_dir(path)?.next().is_none())
 }

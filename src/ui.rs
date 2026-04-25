@@ -39,16 +39,9 @@ a { color: inherit; text-decoration: none; }
     border-bottom: 1px solid var(--line);
     background: var(--header);
     display: flex;
-    gap: 1rem;
+    gap: 0.8rem;
     align-items: center;
-    justify-content: space-between;
-}
-
-.header h1 {
-    margin: 0;
-    font-size: clamp(1rem, 1.3vw, 1.35rem);
-    font-weight: 700;
-    letter-spacing: 0.02em;
+    justify-content: flex-end;
 }
 
 .path {
@@ -63,7 +56,33 @@ a { color: inherit; text-decoration: none; }
     display: flex;
     align-items: center;
     gap: 0.8rem;
-    min-width: min(56vw, 520px);
+    min-width: min(72vw, 760px);
+    width: 100%;
+}
+
+.search-tools {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.home-button {
+    width: auto;
+    height: 2.1rem;
+    border: 1px solid var(--line);
+    background: #ffffff;
+    color: var(--ink);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.55rem;
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.home-button:hover {
+    background: var(--panel-hover);
 }
 
 .search-form {
@@ -224,8 +243,9 @@ video {
 }
 
 @media (max-width: 640px) {
-    .header { flex-direction: column; align-items: flex-start; }
+    .header { flex-direction: column; align-items: stretch; }
     .header-right { width: 100%; min-width: 0; flex-direction: column; align-items: stretch; }
+    .search-tools { margin-left: 0; width: 100%; }
     .search-form { width: 100%; }
     .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 }
@@ -248,18 +268,20 @@ fn page_shell(
             <body>
                 <main class="app">
                     <header class="header">
-                        <h1>"Sapling Media"</h1>
                         <div class="header-right">
                             <div class="path">{path}</div>
-                            <form class="search-form" action="/browse/" method="get">
-                                <input
-                                    class="search-input"
-                                    type="search"
-                                    name="q"
-                                    placeholder="Search all paths"
-                                    value=search_query
-                                />
-                            </form>
+                            <div class="search-tools">
+                                <a class="home-button" href="/browse/" aria-label="Home">"⌂"</a>
+                                <form class="search-form" action="/browse/" method="get">
+                                    <input
+                                        class="search-input"
+                                        type="search"
+                                        name="q"
+                                        placeholder="Search all paths"
+                                        value=search_query
+                                    />
+                                </form>
+                            </div>
                         </div>
                     </header>
                     {content}
