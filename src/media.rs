@@ -2,6 +2,8 @@ use std::path::{Component, Path, PathBuf};
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 
+use crate::thumbnail;
+
 #[derive(Debug, Clone)]
 pub struct FolderEntry {
     pub name: String,
@@ -13,6 +15,7 @@ pub struct FolderEntry {
 pub struct VideoEntry {
     pub name: String,
     pub relative_path: PathBuf,
+    pub thumbnail_url: Option<String>,
 }
 
 #[derive(Debug)]
@@ -81,7 +84,11 @@ pub fn resolve_video_file(root: &Path, relative_raw: &str) -> Result<(PathBuf, P
     Ok((absolute, relative))
 }
 
-pub fn scan_directory(absolute_dir: &Path, relative_dir: &Path) -> std::io::Result<(Vec<FolderEntry>, Vec<VideoEntry>)> {
+pub fn scan_directory(
+    media_root: &Path,
+    absolute_dir: &Path,
+    relative_dir: &Path,
+) -> std::io::Result<(Vec<FolderEntry>, Vec<VideoEntry>)> {
     let mut folders = Vec::new();
     let mut videos = Vec::new();
 
@@ -105,9 +112,17 @@ pub fn scan_directory(absolute_dir: &Path, relative_dir: &Path) -> std::io::Resu
                 thumbnail_relative_path,
             });
         } else if path.is_file() && is_supported_video_file(&path) {
+            let video_relative_path = relative_dir.join(entry.file_name());
+            let thumbnail_url = if thumbnail::valid_thumbnail_path_for_video(media_root, &video_relative_path).is_some() {
+                Some(format!("/thumb/video/{}", encode_url_path(&video_relative_path)))
+            } else {
+                None
+            };
+
             videos.push(VideoEntry {
                 name: file_name,
-                relative_path: relative_dir.join(entry.file_name()),
+                relative_path: video_relative_path,
+                thumbnail_url,
             });
         }
     }

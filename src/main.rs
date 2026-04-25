@@ -1,4 +1,5 @@
 mod media;
+mod thumbnail;
 mod ui;
 
 use std::net::{IpAddr, SocketAddr};
@@ -16,6 +17,7 @@ use tower_http::services::ServeDir;
 use crate::media::{
     encode_url_path, format_breadcrumbs, resolve_directory, resolve_video_file, scan_directory, ResolveError,
 };
+use crate::thumbnail::valid_thumbnail_path_for_video;
 
 #[derive(Debug, Parser)]
 #[command(name = "sapling")]
@@ -53,6 +55,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/browse/", get(browse_root))
         .route("/browse/{*path}", get(browse))
         .route("/play/{*path}", get(play))
+        .route("/thumb/video/{*path}", get(video_thumbnail))
         .nest_service("/media", media_service)
         .with_state(state);
 
@@ -78,7 +81,7 @@ async fn browse(State(state): State<AppState>, Path(path): Path<String>) -> Resp
         Err(err) => return render_path_error(err),
     };
 
-    let (folders, videos) = match scan_directory(&absolute, &relative) {
+    let (folders, videos) = match scan_directory(state.media_root.as_ref(), &absolute, &relative) {
         Ok(values) => values,
         Err(err) => {
             return (
@@ -91,6 +94,28 @@ async fn browse(State(state): State<AppState>, Path(path): Path<String>) -> Resp
 
     let breadcrumbs = format_breadcrumbs(&relative);
     (StatusCode::OK, Html(ui::render_browse_page(&breadcrumbs, &folders, &videos))).into_response()
+}
+
+async fn video_thumbnail(State(state): State<AppState>, Path(path): Path<String>) -> Response {
+    let (_absolute, relative) = match resolve_video_file(state.media_root.as_ref(), &path) {
+        Ok(values) => values,
+        Err(err) => return render_path_error(err),
+    };
+
+    let thumbnail_path = match valid_thumbnail_path_for_video(state.media_root.as_ref(), &relative) {
+        Some(path) => path,
+        None => return (StatusCode::NOT_FOUND, "Thumbnail not found").into_response(),
+    };
+
+    match std::fs::read(thumbnail_path) {
+        Ok(bytes) => (
+            StatusCode::OK,
+            [(axum::http::header::CONTENT_TYPE, "image/png")],
+            bytes,
+        )
+            .into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Could not read thumbnail").into_response(),
+    }
 }
 
 async fn play(State(state): State<AppState>, Path(path): Path<String>) -> Response {

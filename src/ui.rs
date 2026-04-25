@@ -225,9 +225,16 @@ pub fn render_browse_page(
         .iter()
         .map(|video| {
             let play_href = format!("/play/{}", encode_url_path(&video.relative_path));
+            let thumb_view = match &video.thumbnail_url {
+                Some(thumbnail_url) => {
+                    view! { <img class="thumb" src=thumbnail_url.clone() alt=video.name.clone()/> }.into_any()
+                }
+                None => view! { <div class="thumb placeholder">"Video"</div> }.into_any(),
+            };
+
             view! {
                 <a class="card" href=play_href>
-                    <div class="thumb placeholder">"Video"</div>
+                    {thumb_view}
                     <div class="meta">
                         <h3>{video.name.clone()}</h3>
                         <p>"Play in browser"</p>
