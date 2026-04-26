@@ -16,7 +16,8 @@ use serde::Deserialize;
 use tower_http::services::ServeDir;
 
 use crate::media::{
-    encode_url_path, format_breadcrumbs, resolve_directory, resolve_video_file, scan_directory, search_paths,
+    encode_url_path, format_breadcrumbs, playable_kind_for_path, resolve_directory,
+    resolve_playable_file, resolve_video_file, scan_directory, search_paths, PlayableKind,
     ResolveError,
 };
 use crate::thumbnail::get_or_generate_thumbnail_path_for_video;
@@ -112,7 +113,8 @@ async fn browse_impl(state: AppState, path: String, query: BrowseQuery) -> Respo
         Err(err) => return render_path_error(err),
     };
 
-    let (folders, videos) = match scan_directory(state.media_root.as_ref(), &absolute, &relative) {
+    let (folders, videos, audio_files) =
+        match scan_directory(state.media_root.as_ref(), &absolute, &relative) {
         Ok(values) => values,
         Err(err) => {
             return (
@@ -126,7 +128,12 @@ async fn browse_impl(state: AppState, path: String, query: BrowseQuery) -> Respo
     let breadcrumbs = format_breadcrumbs(&relative);
     (
         StatusCode::OK,
-        Html(ui::render_browse_page(&breadcrumbs, &folders, &videos)),
+        Html(ui::render_browse_page(
+            &breadcrumbs,
+            &folders,
+            &videos,
+            &audio_files,
+        )),
     )
         .into_response()
 }
@@ -154,7 +161,7 @@ async fn video_thumbnail(State(state): State<AppState>, Path(path): Path<String>
 }
 
 async fn play(State(state): State<AppState>, Path(path): Path<String>) -> Response {
-    let (_absolute, relative) = match resolve_video_file(state.media_root.as_ref(), &path) {
+    let (absolute, relative, kind) = match resolve_playable_file(state.media_root.as_ref(), &path) {
         Ok(values) => values,
         Err(err) => return render_path_error(err),
     };
@@ -167,13 +174,17 @@ async fn play(State(state): State<AppState>, Path(path): Path<String>) -> Respon
     let display_name = relative
         .file_name()
         .map(|name| name.to_string_lossy().to_string())
-        .unwrap_or_else(|| "Video".to_string());
+        .unwrap_or_else(|| match kind {
+            PlayableKind::Video => "Video".to_string(),
+            PlayableKind::Audio => "Audio".to_string(),
+        });
 
-    (
-        StatusCode::OK,
-        Html(ui::render_video_page(display_name, media_src, parent_href)),
-    )
-        .into_response()
+    let html = match playable_kind_for_path(&absolute).unwrap_or(kind) {
+        PlayableKind::Video => ui::render_video_page(display_name, media_src, parent_href),
+        PlayableKind::Audio => ui::render_audio_page(display_name, media_src, parent_href),
+    };
+
+    (StatusCode::OK, Html(html)).into_response()
 }
 
 fn render_path_error(err: ResolveError) -> Response {
@@ -182,9 +193,9 @@ fn render_path_error(err: ResolveError) -> Response {
         ResolveError::NotDirectory | ResolveError::NotFound | ResolveError::NotFile => {
             (StatusCode::NOT_FOUND, "Requested path was not found.")
         }
-        ResolveError::UnsupportedVideo => (
+        ResolveError::UnsupportedMedia => (
             StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            "Video format is not part of the native playback allow-list.",
+            "Media format is not part of the native playback allow-list.",
         ),
     };
 

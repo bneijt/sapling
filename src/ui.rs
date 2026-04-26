@@ -1,6 +1,8 @@
 use leptos::prelude::*;
 
-use crate::media::{encode_url_path, FolderEntry, SearchEntry, SearchEntryKind, VideoEntry};
+use crate::media::{
+    encode_url_path, AudioEntry, FolderEntry, SearchEntry, SearchEntryKind, VideoEntry,
+};
 
 const STYLE: &str = r#"
 :root {
@@ -167,12 +169,16 @@ a { color: inherit; text-decoration: none; }
     font-size: 0.76rem;
 }
 
-.video-wrap {
+.player-wrap {
     padding: 0.8rem 1rem;
 }
 
+audio,
 video {
     width: 100%;
+}
+
+video {
     max-height: calc(100vh - 8rem);
     background: #000;
 }
@@ -297,6 +303,7 @@ pub fn render_browse_page(
     breadcrumbs: &[(String, String)],
     folders: &[FolderEntry],
     videos: &[VideoEntry],
+    audio_files: &[AudioEntry],
 ) -> String {
     let breadcrumb_view = breadcrumbs
         .iter()
@@ -361,13 +368,30 @@ pub fn render_browse_page(
         })
         .collect_view();
 
+    let audio_cards = audio_files
+        .iter()
+        .map(|audio| {
+            let play_href = format!("/play/{}", encode_url_path(&audio.relative_path));
+
+            view! {
+                <a class="card" href=play_href>
+                    <div class="thumb placeholder">"Audio"</div>
+                    <div class="meta">
+                        <h3>{audio.name.clone()}</h3>
+                        <p>"Play in browser"</p>
+                    </div>
+                </a>
+            }
+        })
+        .collect_view();
+
     page_shell(
         "Sapling Media",
         String::new(),
         String::new(),
         view! {
             <section class="helper">{breadcrumb_view}</section>
-            <section class="grid">{folder_cards}{video_cards}</section>
+            <section class="grid">{folder_cards}{video_cards}{audio_cards}</section>
         },
     )
 }
@@ -384,10 +408,12 @@ pub fn render_search_results_page(query: &str, entries: &[SearchEntry]) -> Strin
                         format!("/browse/{}", encode_url_path(&entry.relative_path))
                     }
                     SearchEntryKind::Video => format!("/play/{}", encode_url_path(&entry.relative_path)),
+                    SearchEntryKind::Audio => format!("/play/{}", encode_url_path(&entry.relative_path)),
                 };
                 let kind = match entry.kind {
                     SearchEntryKind::Folder => "Folder",
                     SearchEntryKind::Video => "Video",
+                    SearchEntryKind::Audio => "Audio",
                 };
 
                 view! {
@@ -419,21 +445,48 @@ pub fn render_search_results_page(query: &str, entries: &[SearchEntry]) -> Strin
 }
 
 pub fn render_video_page(display_name: String, media_src: String, parent_href: String) -> String {
+    render_player_page(
+        display_name,
+        parent_href,
+        view! {
+            <video controls=true autoplay=true preload="metadata">
+                <source src=media_src/>
+                "Your browser cannot play this video format natively."
+            </video>
+        },
+    )
+}
+
+pub fn render_audio_page(display_name: String, media_src: String, parent_href: String) -> String {
+    render_player_page(
+        display_name,
+        parent_href,
+        view! {
+            <audio controls=true autoplay=true preload="metadata">
+                <source src=media_src/>
+                "Your browser cannot play this audio format natively."
+            </audio>
+        },
+    )
+}
+
+fn render_player_page(
+    display_name: String,
+    parent_href: String,
+    player: impl IntoView + 'static,
+) -> String {
     page_shell(
         "Now Playing",
         display_name.clone(),
         String::new(),
         view! {
-            <section class="video-wrap">
+            <section class="player-wrap">
                 <a class="cta" href=parent_href>
                     "Back to folder"
                 </a>
             </section>
-            <section class="video-wrap">
-                <video controls=true autoplay=true preload="metadata">
-                    <source src=media_src/>
-                    "Your browser cannot play this video format natively."
-                </video>
+            <section class="player-wrap">
+                {player}
             </section>
         },
     )
