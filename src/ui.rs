@@ -132,6 +132,12 @@ a { color: inherit; text-decoration: none; }
     background: var(--panel-hover);
 }
 
+.is-selected {
+    outline: 3px solid #c7d2fe;
+    outline-offset: -3px;
+    background: #eef2ff;
+}
+
 .thumb {
     width: 100%;
     aspect-ratio: 16 / 9;
@@ -257,12 +263,139 @@ video {
 }
 "#;
 
+const KEYBOARD_NAV_SCRIPT: &str = r#"
+(() => {
+    const items = Array.from(document.querySelectorAll('[data-nav-item]'));
+    if (items.length === 0) {
+        return;
+    }
+
+    const parentHref = document.body.getAttribute('data-parent-href') || '';
+    let selectedIndex = 0;
+
+    const isTypingTarget = () => {
+        const active = document.activeElement;
+        if (!active) {
+            return false;
+        }
+
+        if (active.matches('input, textarea, select')) {
+            return true;
+        }
+
+        return active.getAttribute('contenteditable') === 'true';
+    };
+
+    const setSelected = (index) => {
+        if (!Number.isInteger(index) || index < 0 || index >= items.length) {
+            return;
+        }
+
+        items[selectedIndex].classList.remove('is-selected');
+        selectedIndex = index;
+        items[selectedIndex].classList.add('is-selected');
+        items[selectedIndex].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    };
+
+    const openSelected = () => {
+        const href = items[selectedIndex].getAttribute('href');
+        if (href) {
+            window.location.assign(href);
+        }
+    };
+
+    const verticalNeighbor = (direction) => {
+        const currentRect = items[selectedIndex].getBoundingClientRect();
+        const currentCenterX = currentRect.left + currentRect.width / 2;
+        const currentCenterY = currentRect.top + currentRect.height / 2;
+        let bestIndex = selectedIndex;
+        let bestScore = Number.POSITIVE_INFINITY;
+
+        items.forEach((item, idx) => {
+            if (idx === selectedIndex) {
+                return;
+            }
+
+            const rect = item.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const verticalDelta = centerY - currentCenterY;
+
+            if (direction === 'up' && verticalDelta >= -2) {
+                return;
+            }
+
+            if (direction === 'down' && verticalDelta <= 2) {
+                return;
+            }
+
+            const verticalDistance = Math.abs(verticalDelta);
+            const horizontalDistance = Math.abs(centerX - currentCenterX);
+            const score = verticalDistance * 4 + horizontalDistance;
+
+            if (score < bestScore) {
+                bestScore = score;
+                bestIndex = idx;
+            }
+        });
+
+        return bestIndex;
+    };
+
+    items.forEach((item, idx) => {
+        item.addEventListener('mouseenter', () => setSelected(idx));
+        item.addEventListener('focus', () => setSelected(idx));
+    });
+
+    setSelected(0);
+
+    document.addEventListener('keydown', (event) => {
+        if (isTypingTarget()) {
+            return;
+        }
+
+        switch (event.key) {
+            case 'ArrowLeft':
+                event.preventDefault();
+                setSelected(Math.max(0, selectedIndex - 1));
+                break;
+            case 'ArrowRight':
+                event.preventDefault();
+                setSelected(Math.min(items.length - 1, selectedIndex + 1));
+                break;
+            case 'ArrowUp':
+                event.preventDefault();
+                setSelected(verticalNeighbor('up'));
+                break;
+            case 'ArrowDown':
+                event.preventDefault();
+                setSelected(verticalNeighbor('down'));
+                break;
+            case 'Enter':
+                event.preventDefault();
+                openSelected();
+                break;
+            case 'Backspace':
+                if (parentHref) {
+                    event.preventDefault();
+                    window.location.assign(parentHref);
+                }
+                break;
+            default:
+                break;
+        }
+    });
+})();
+"#;
+
 fn page_shell(
     title: &'static str,
     path: String,
     search_query: String,
+        parent_href: Option<String>,
     content: impl IntoView + 'static,
 ) -> String {
+        let parent_attr = parent_href.unwrap_or_default();
     let html = view! {
         <html lang="en">
             <head>
@@ -271,7 +404,7 @@ fn page_shell(
                 <title>{title}</title>
                 <style>{STYLE}</style>
             </head>
-            <body>
+                        <body data-parent-href=parent_attr>
                 <main class="app">
                     <header class="header">
                         <div class="header-right">
@@ -292,6 +425,7 @@ fn page_shell(
                     </header>
                     {content}
                 </main>
+                <script>{KEYBOARD_NAV_SCRIPT}</script>
             </body>
         </html>
     };
@@ -305,6 +439,12 @@ pub fn render_browse_page(
     videos: &[VideoEntry],
     audio_files: &[AudioEntry],
 ) -> String {
+    let parent_href = if breadcrumbs.len() > 1 {
+        Some(breadcrumbs[breadcrumbs.len() - 2].1.clone())
+    } else {
+        Some("/browse/".to_string())
+    };
+
     let breadcrumb_view = breadcrumbs
         .iter()
         .enumerate()
@@ -334,7 +474,7 @@ pub fn render_browse_page(
             };
 
             view! {
-                <a class="card" href=browse_href>
+                <a class="card" href=browse_href data-nav-item>
                     {thumb_view}
                     <div class="meta">
                         <h3>{folder.name.clone()}</h3>
@@ -357,7 +497,7 @@ pub fn render_browse_page(
             };
 
             view! {
-                <a class="card" href=play_href>
+                <a class="card" href=play_href data-nav-item>
                     {thumb_view}
                     <div class="meta">
                         <h3>{video.name.clone()}</h3>
@@ -374,7 +514,7 @@ pub fn render_browse_page(
             let play_href = format!("/play/{}", encode_url_path(&audio.relative_path));
 
             view! {
-                <a class="card" href=play_href>
+                <a class="card" href=play_href data-nav-item>
                     <div class="thumb placeholder">"Audio"</div>
                     <div class="meta">
                         <h3>{audio.name.clone()}</h3>
@@ -389,6 +529,7 @@ pub fn render_browse_page(
         "Sapling Media",
         String::new(),
         String::new(),
+        parent_href,
         view! {
             <section class="helper">{breadcrumb_view}</section>
             <section class="grid">{folder_cards}{video_cards}{audio_cards}</section>
@@ -418,7 +559,7 @@ pub fn render_search_results_page(query: &str, entries: &[SearchEntry]) -> Strin
 
                 view! {
                     <li class="results-row">
-                        <a class="results-path" href=href>{entry.relative_path.to_string_lossy().to_string()}</a>
+                        <a class="results-path" href=href data-nav-item>{entry.relative_path.to_string_lossy().to_string()}</a>
                         <span class="results-kind">{kind}</span>
                     </li>
                 }
@@ -431,6 +572,7 @@ pub fn render_search_results_page(query: &str, entries: &[SearchEntry]) -> Strin
         "Search Results",
         format!("Search: {}", query),
         query.to_string(),
+        Some("/browse/".to_string()),
         view! {
             <section class="results">
                 <div class="results-header">{format!("{} match(es)", entries.len())}</div>
@@ -475,10 +617,12 @@ fn render_player_page(
     parent_href: String,
     player: impl IntoView + 'static,
 ) -> String {
+    let parent_href_clone = parent_href.clone();
     page_shell(
         "Now Playing",
         display_name.clone(),
         String::new(),
+        Some(parent_href_clone),
         view! {
             <section class="player-wrap">
                 <a class="cta" href=parent_href>
@@ -497,6 +641,7 @@ pub fn render_not_found(message: String) -> String {
         "Not Found",
         "Error".to_string(),
         String::new(),
+        Some("/browse/".to_string()),
         view! {
             <section class="helper">
                 <h2>"Not found"</h2>
