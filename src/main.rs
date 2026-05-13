@@ -16,9 +16,8 @@ use serde::Deserialize;
 use tower_http::services::ServeDir;
 
 use crate::media::{
-    encode_url_path, format_breadcrumbs, list_directory, playable_kind_for_path,
-    resolve_directory, resolve_playable_file, resolve_video_file, scan_directory, search_paths,
-    PlayableKind, ResolveError,
+    format_breadcrumbs, list_directory, resolve_directory, resolve_video_file, scan_directory,
+    search_paths, ResolveError,
 };
 use crate::thumbnail::get_or_generate_thumbnail_path_for_video;
 
@@ -67,7 +66,6 @@ async fn main() -> anyhow::Result<()> {
         .route("/", get(root))
         .route("/browse/", get(browse_root))
         .route("/browse/{*path}", get(browse))
-        .route("/play/{*path}", get(play))
         .route("/thumb/video/{*path}", get(video_thumbnail))
         .route("/api/list", get(api_list))
         .nest_service("/media", media_service)
@@ -164,33 +162,6 @@ async fn video_thumbnail(State(state): State<AppState>, Path(path): Path<String>
             .into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Could not read thumbnail").into_response(),
     }
-}
-
-async fn play(State(state): State<AppState>, Path(path): Path<String>) -> Response {
-    let (absolute, relative, kind) = match resolve_playable_file(state.media_root.as_ref(), &path) {
-        Ok(values) => values,
-        Err(err) => return render_path_error(err),
-    };
-
-    let media_src = format!("/media/{}", encode_url_path(&relative));
-    let parent_href = relative
-        .parent()
-        .map(|parent| format!("/browse/{}", encode_url_path(parent)))
-        .unwrap_or_else(|| "/browse/".to_string());
-    let display_name = relative
-        .file_name()
-        .map(|name| name.to_string_lossy().to_string())
-        .unwrap_or_else(|| match kind {
-            PlayableKind::Video => "Video".to_string(),
-            PlayableKind::Audio => "Audio".to_string(),
-        });
-
-    let html = match playable_kind_for_path(&absolute).unwrap_or(kind) {
-        PlayableKind::Video => ui::render_video_page(display_name, media_src, parent_href),
-        PlayableKind::Audio => ui::render_audio_page(display_name, media_src, parent_href),
-    };
-
-    (StatusCode::OK, Html(html)).into_response()
 }
 
 async fn api_list(

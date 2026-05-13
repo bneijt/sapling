@@ -6,6 +6,7 @@ use serde::Serialize;
 use crate::thumbnail;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct FolderEntry {
     pub name: String,
     pub relative_path: PathBuf,
@@ -13,6 +14,7 @@ pub struct FolderEntry {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct VideoEntry {
     pub name: String,
     pub relative_path: PathBuf,
@@ -127,8 +129,8 @@ pub fn resolve_playable_file(
     Ok((absolute, relative, kind))
 }
 
-pub fn playable_kind_for_path(path: &Path) -> Option<PlayableKind> {
-    classify_playable_file(path)
+#[allow(dead_code)]
+pub fn playable_kind_for_path(path: &Path) -> Option<PlayableKind> {    classify_playable_file(path)
 }
 
 pub fn scan_directory(

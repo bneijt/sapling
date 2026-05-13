@@ -4,1194 +4,1503 @@ use crate::media::{
     encode_url_path, AudioEntry, FolderEntry, SearchEntry, SearchEntryKind, VideoEntry,
 };
 
-const STYLE: &str = r#"
+// ── Shared minimal style (used by error/search pages) ────────────────────────
+
+const BASE_STYLE: &str = r#"
 :root {
-    color-scheme: light;
-    --bg: #f3f4f6;
-    --panel: #ffffff;
-    --panel-hover: #f8fafc;
-    --header: #ffffff;
-    --ink: #111827;
-    --muted: #6b7280;
-    --line: #d1d5db;
+    color-scheme: dark;
+    --bg:         #0f0f0f;
+    --panel:      #1a1a1a;
+    --panel2:     #242424;
+    --ink:        #e8e8e8;
+    --muted:      #888;
+    --line:       #333;
+    --accent:     #6366f1;
+    --accent-dim: #3730a3;
+    --focus:      #818cf8;
 }
 
 * { box-sizing: border-box; }
 
-html,
-body {
-    min-height: 100%;
-}
-
-body {
+html, body {
     margin: 0;
-    font-family: "Inter", sans-serif;
-    color: var(--ink);
+    min-height: 100%;
     background: var(--bg);
+    color: var(--ink);
+    font-family: "Inter", system-ui, sans-serif;
 }
 
 a { color: inherit; text-decoration: none; }
 
-.app {
+.sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+"#;
+
+// ── TV UI style ───────────────────────────────────────────────────────────────
+
+const TV_STYLE: &str = r#"
+/* ── Reset / base ─────────────────────────────────────── */
+:root {
+    color-scheme: dark;
+    --bg:         #0f0f0f;
+    --panel:      #1a1a1a;
+    --panel2:     #242424;
+    --ink:        #e8e8e8;
+    --muted:      #888;
+    --line:       #2a2a2a;
+    --accent:     #6366f1;
+    --accent-dim: #3730a3;
+    --focus:      #818cf8;
+    --playing:    #22c55e;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 16px;
+}
+
+a { color: inherit; text-decoration: none; }
+
+/* ── Zone wrapper ──────────────────────────────────────── */
+.tv-app {
+    display: flex;
+    flex-direction: column;
     min-height: 100vh;
 }
 
-.header {
-    padding: 0.85rem 1rem;
-    border-bottom: 1px solid var(--line);
-    background: var(--header);
-    display: flex;
-    gap: 0.8rem;
-    align-items: center;
-    justify-content: flex-end;
+/* ── Zone focus ring ───────────────────────────────────── */
+.zone-focused {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
 }
 
-.path {
-    color: var(--muted);
-    font-size: 0.88rem;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-}
-
-.header-right {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    min-width: min(72vw, 760px);
+/* ── Zone 1: Player ────────────────────────────────────── */
+.tv-player {
+    position: relative;
     width: 100%;
-}
-
-.search-tools {
-    margin-left: auto;
+    background: #000;
+    min-height: 45vh;
     display: flex;
-    align-items: center;
-    gap: 0.4rem;
+    flex-direction: column;
 }
 
-.home-button {
-    width: auto;
-    height: 2.1rem;
-    border: 1px solid var(--line);
-    background: #ffffff;
-    color: var(--ink);
-    display: inline-flex;
+.tv-player video,
+.tv-player audio {
+    width: 100%;
+    max-height: 45vh;
+    display: block;
+    background: #000;
+}
+
+.tv-player audio {
+    max-height: unset;
+    min-height: 10vh;
+}
+
+.player-placeholder {
+    flex: 1;
+    display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 0.55rem;
-    font-size: 0.95rem;
-    line-height: 1;
+    min-height: 45vh;
+    color: var(--muted);
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    user-select: none;
 }
 
-.home-button:hover {
-    background: var(--panel-hover);
-}
-
-.search-form {
-    margin: 0;
-    width: min(420px, 100%);
-}
-
-.search-input {
-    width: 100%;
-    height: 2.1rem;
-    border: 1px solid var(--line);
-    background: #ffffff;
-    color: var(--ink);
-    padding: 0 0.7rem;
-    font: inherit;
-}
-
-.search-input:focus {
-    outline: 2px solid #c7d2fe;
-    outline-offset: 0;
-}
-
-.grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 1px;
-    background: var(--line);
+.player-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    background: rgba(0,0,0,0.7);
     border-top: 1px solid var(--line);
+    font-size: 0.82rem;
+    color: var(--muted);
+    min-height: 2.4rem;
+}
+
+.player-bar-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.player-hint {
+    font-size: 0.72rem;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+/* ── Zone 2: Queue ─────────────────────────────────────── */
+.tv-queue {
+    background: var(--panel);
+    border-top: 2px solid var(--line);
+}
+
+.tv-queue-header {
+    padding: 0.6rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
     border-bottom: 1px solid var(--line);
 }
 
-.grid:empty {
+.queue-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.65rem 1rem;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.95rem;
+    cursor: default;
+    user-select: none;
+}
+
+.queue-row:last-child {
     border-bottom: none;
 }
 
-.card {
+.queue-row.is-focused {
+    background: var(--panel2);
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+}
+
+.queue-row.is-playing .queue-row-label {
+    color: var(--playing);
+    font-weight: 700;
+}
+
+.queue-row-num {
+    font-size: 0.75rem;
+    color: var(--muted);
+    min-width: 1.6rem;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.queue-row-label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queue-row-badge {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    padding: 0.1rem 0.35rem;
+    flex-shrink: 0;
+}
+
+.queue-row-badge.badge-playing {
+    color: var(--playing);
+    border-color: var(--playing);
+}
+
+.queue-row.is-undefined {
+    color: var(--muted);
+    font-style: italic;
+}
+
+.queue-empty-hint {
+    padding: 1rem;
+    color: var(--muted);
+    font-size: 0.88rem;
+    text-align: center;
+}
+
+.queue-hint {
+    padding: 0.4rem 1rem;
+    font-size: 0.72rem;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+}
+
+/* ── Zone 3: Command picker ────────────────────────────── */
+.tv-cmdpicker {
+    background: var(--panel2);
+    border-top: 2px solid var(--accent-dim);
+    display: none;
+}
+
+.tv-cmdpicker.is-visible {
     display: block;
+}
+
+.tv-cmdpicker-header {
+    padding: 0.6rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+}
+
+.cmd-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem 1rem;
+}
+
+.cmd-option {
+    padding: 0.7rem 1.2rem;
+    border: 2px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.9rem;
+    cursor: default;
+    user-select: none;
+    border-radius: 2px;
+}
+
+.cmd-option.is-focused {
+    border-color: var(--focus);
+    background: var(--panel2);
+    color: var(--focus);
+    outline: none;
+}
+
+/* ── Zone 4: Command config ────────────────────────────── */
+.tv-cmdconfig {
+    background: var(--bg);
+    border-top: 2px solid var(--accent-dim);
+    display: none;
+}
+
+.tv-cmdconfig.is-visible {
+    display: block;
+}
+
+.tv-cmdconfig-header {
+    padding: 0.6rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.tv-cmdconfig-title {
+    flex: 1;
+}
+
+/* ── Browser (inside Zone 4) ───────────────────────────── */
+.browser-search-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+}
+
+.browser-search-input {
+    flex: 1;
+    background: var(--panel2);
+    border: 2px solid var(--line);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.9rem;
+    padding: 0.4rem 0.7rem;
+    height: 2.2rem;
+}
+
+.browser-search-input:focus {
+    outline: none;
+    border-color: var(--focus);
+}
+
+.browser-search-input.is-focused {
+    border-color: var(--focus);
+}
+
+.browser-breadcrumb {
+    padding: 0.45rem 1rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.browser-breadcrumb a,
+.browser-breadcrumb span {
+    color: var(--muted);
+}
+
+.browser-select-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid var(--accent-dim);
+    background: var(--panel2);
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: default;
+    user-select: none;
+}
+
+.browser-select-row.is-focused {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+    color: var(--focus);
+}
+
+.browser-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1px;
+    background: var(--line);
+}
+
+.browser-card {
+    display: flex;
+    flex-direction: column;
     background: var(--panel);
     overflow: hidden;
-    min-width: 0;
-    transition: background 0.18s ease;
+    cursor: default;
+    user-select: none;
 }
 
-.card:hover {
-    background: var(--panel-hover);
-}
-
-.is-selected {
-    outline: 3px solid #c7d2fe;
+.browser-card.is-focused {
+    outline: 3px solid var(--focus);
     outline-offset: -3px;
-    background: #eef2ff;
+    background: var(--panel2);
 }
 
-.thumb {
+.browser-card .thumb {
     width: 100%;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 16/9;
     object-fit: cover;
     display: block;
-    background: #e5e7eb;
+    background: #111;
 }
 
-.thumb.placeholder {
+.browser-card .thumb.placeholder {
     display: grid;
     place-items: center;
     color: var(--muted);
+    font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
 
-.meta {
-    padding: 0.65rem 0.8rem 0.8rem;
+.browser-card .card-meta {
+    padding: 0.5rem 0.7rem 0.6rem;
     border-top: 1px solid var(--line);
 }
 
-.meta h3 {
-    margin: 0 0 0.3rem;
+.browser-card .card-meta h3 {
+    margin: 0 0 0.2rem;
+    font-size: 0.82rem;
+    font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 0.9rem;
-    font-weight: 700;
 }
 
-.meta p {
+.browser-card .card-meta p {
     margin: 0;
+    font-size: 0.7rem;
     color: var(--muted);
-    font-size: 0.76rem;
 }
 
-.player-wrap {
-    padding: 0.8rem 1rem;
+/* ── Loop picker (inside Zone 4) ───────────────────────── */
+.loop-picker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.2rem;
+    padding: 2rem 1rem;
 }
 
-audio,
-video {
-    width: 100%;
+.loop-picker-label {
+    font-size: 1rem;
+    color: var(--muted);
 }
 
-video {
-    max-height: calc(100vh - 8rem);
-    background: #000;
+.loop-picker-value {
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--ink);
+    min-width: 6rem;
+    text-align: center;
 }
 
+.loop-picker-hint {
+    font-size: 0.78rem;
+    color: var(--muted);
+}
+
+.loop-picker-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.loop-btn {
+    padding: 0.6rem 1.6rem;
+    border: 2px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.9rem;
+    cursor: default;
+    user-select: none;
+}
+
+.loop-btn.is-focused {
+    border-color: var(--focus);
+    color: var(--focus);
+}
+
+/* ── Misc ──────────────────────────────────────────────── */
 .helper {
     padding: 0.8rem 1rem;
     color: var(--muted);
-    background: #f9fafb;
+    font-size: 0.88rem;
 }
 
-.cta {
-    display: inline-block;
-    padding: 0.5rem 0.85rem;
-    border: 1px solid var(--line);
-    background: #ffffff;
-    font-weight: 700;
-    color: var(--ink);
+@media (max-width: 600px) {
+    .browser-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    }
+    .cmd-options {
+        flex-direction: column;
+    }
 }
+"#;
 
-.results {
-    border-top: 1px solid var(--line);
-    border-bottom: 1px solid var(--line);
-    background: var(--panel);
+// ── Shared base page shell (for error / search pages) ────────────────────────
+
+const SIMPLE_STYLE: &str = r#"
+.simple-app {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
 }
-
+.simple-header {
+    margin-bottom: 1.5rem;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+.simple-header a {
+    color: var(--focus);
+    font-size: 0.88rem;
+}
+.results { border: 1px solid var(--line); background: var(--panel); }
 .results-header {
     padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--line);
     color: var(--muted);
     font-size: 0.86rem;
 }
-
-.results-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
-
+.results-list { list-style: none; margin: 0; padding: 0; }
 .results-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.6rem;
     padding: 0.72rem 1rem;
-    border-top: 1px solid #eceff3;
+    border-top: 1px solid #1e1e1e;
 }
-
-.results-row:first-child {
-    border-top: none;
-}
-
+.results-row:first-child { border-top: none; }
 .results-kind {
     color: var(--muted);
     font-size: 0.74rem;
     text-transform: uppercase;
     letter-spacing: 0.07em;
 }
-
 .results-path {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--focus);
 }
-
-.results-empty {
-    padding: 1rem;
-    color: var(--muted);
-}
-
-@media (max-width: 640px) {
-    .header { flex-direction: column; align-items: stretch; }
-    .header-right { width: 100%; min-width: 0; flex-direction: column; align-items: stretch; }
-    .search-tools { margin-left: 0; width: 100%; }
-    .search-form { width: 100%; }
-    .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
-}
-
-/* ── Queue panel ─────────────────────────────────────────────── */
-
-body.has-queue {
-    padding-bottom: 48px;
-}
-
-.queue-panel {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 100;
-    background: var(--header);
-    border-top: 1px solid var(--line);
-    height: 48px;
-    overflow: hidden;
-    transition: height 0.2s ease;
-    display: flex;
-    flex-direction: column;
-}
-
-.queue-panel.is-open {
-    height: 240px;
-}
-
-.queue-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0 0.8rem;
-    height: 48px;
-    flex-shrink: 0;
-    border-bottom: 1px solid var(--line);
-}
-
-.queue-header-title {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: var(--ink);
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.queue-now-playing {
-    font-size: 0.78rem;
-    color: var(--muted);
-    flex: 2;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.queue-btn {
-    border: 1px solid var(--line);
-    background: #fff;
-    color: var(--ink);
-    font: inherit;
-    font-size: 0.78rem;
-    padding: 0.2rem 0.5rem;
-    cursor: pointer;
-    height: 1.8rem;
-    line-height: 1;
-    white-space: nowrap;
-}
-
-.queue-btn:hover { background: var(--panel-hover); }
-
-.queue-list {
-    overflow-y: auto;
-    flex: 1;
-}
-
-.queue-empty {
-    padding: 0.6rem 1rem;
-    color: var(--muted);
-    font-size: 0.82rem;
-}
-
-.queue-item {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.3rem 0.8rem;
-    border-bottom: 1px solid #f0f0f0;
-    font-size: 0.82rem;
-}
-
-.queue-item.is-active {
-    background: #eef2ff;
-}
-
-.queue-item-index {
-    color: var(--muted);
-    font-size: 0.72rem;
-    min-width: 1.4rem;
-    text-align: right;
-}
-
-.queue-item-label {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.queue-item-type {
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-    background: var(--bg);
-    padding: 0.1rem 0.3rem;
-    border: 1px solid var(--line);
-}
-
-.queue-item-btn {
-    border: none;
-    background: none;
-    cursor: pointer;
-    color: var(--muted);
-    font-size: 0.8rem;
-    padding: 0.1rem 0.25rem;
-    line-height: 1;
-}
-
-.queue-item-btn:hover { color: var(--ink); }
-.queue-item-btn:disabled { opacity: 0.3; cursor: default; }
-
-/* ── Player overlay ──────────────────────────────────────────── */
-
-.player-overlay {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    z-index: 201;
-    width: min(600px, calc(100vw - 2rem));
-    background: var(--panel);
-    border: 1px solid var(--line);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    transition: height 0.18s ease;
-}
-
-.player-overlay[hidden] { display: none; }
-
-.player-overlay.is-minimized {
-    height: 52px !important;
-}
-
-.overlay-header {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0 0.7rem;
-    height: 52px;
-    flex-shrink: 0;
-    border-bottom: 1px solid var(--line);
-    background: var(--header);
-    cursor: move;
-}
-
-.overlay-title {
-    flex: 1;
-    font-size: 0.82rem;
-    font-weight: 700;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.overlay-btn {
-    border: 1px solid var(--line);
-    background: #fff;
-    color: var(--ink);
-    font: inherit;
-    font-size: 0.82rem;
-    padding: 0.15rem 0.45rem;
-    cursor: pointer;
-    height: 1.7rem;
-    line-height: 1;
-}
-
-.overlay-btn:hover { background: var(--panel-hover); }
-
-.overlay-media-wrap {
-    background: #000;
-}
-
-.overlay-media-wrap video,
-.overlay-media-wrap audio {
-    width: 100%;
-    max-height: 340px;
-    display: block;
-}
-
-.overlay-media-wrap audio {
-    max-height: unset;
-    background: #1a1a2e;
-    padding: 1rem;
-}
-
-/* ── Context menu ────────────────────────────────────────────── */
-
-.ctx-menu {
-    position: fixed;
-    z-index: 300;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.14);
-    min-width: 200px;
-    padding: 0.25rem 0;
-}
-
-.ctx-menu[hidden] { display: none; }
-
-.ctx-item {
-    display: block;
-    width: 100%;
-    text-align: left;
-    border: none;
-    background: none;
-    font: inherit;
-    font-size: 0.85rem;
-    color: var(--ink);
-    padding: 0.48rem 1rem;
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-.ctx-item:hover { background: var(--panel-hover); }
-
-.ctx-separator {
-    height: 1px;
-    background: var(--line);
-    margin: 0.25rem 0;
-}
+.results-empty { padding: 1rem; color: var(--muted); }
 "#;
 
-const KEYBOARD_NAV_SCRIPT: &str = r#"
+// ── TV script ─────────────────────────────────────────────────────────────────
+
+const TV_SCRIPT: &str = r#"
 (() => {
-    const items = Array.from(document.querySelectorAll('[data-nav-item]'));
-    if (items.length === 0) {
+'use strict';
+
+const STORAGE_KEY   = 'sapling_queue_v2';
+const VIDEO_EXTS    = ['m4v','mp4','webm','mkv','mov','avi'];
+const AUDIO_EXTS    = ['mp3','m4a','aac','ogg','opus','wav','flac'];
+
+// ── State ──────────────────────────────────────────────────────────────────
+const S = {
+    zone:             'queue',   // 'player' | 'queue' | 'cmdpicker' | 'cmdconfig'
+    queue:            loadQueue(),
+    currentPlaying:   -1,        // index of item currently playing
+    queueFocus:       0,         // focused row index in queue zone
+    pendingIdx:       -1,        // queue index of the [undefined] item being configured
+    pendingCmd:       null,      // 'play_file'|'play_folder'|'random_folder'|'loop'|'clear'
+    cmdFocus:         0,         // focused index in command picker
+    // browser sub-state
+    browser: {
+        path:         '',
+        items:        [],
+        focus:        0,         // 0 = search bar, 1+ = grid item (1-indexed)
+        searchQuery:  '',
+        selectRowVisible: false, // show "select N files" row
+        selectRowLabel:   '',
+        selectRowValue:   null,  // the item to confirm on select-row enter
+    },
+    // loop picker sub-state
+    loopCount:        3,         // 0 = infinite
+    loopFocus:        'value',   // 'value' | 'confirm' | 'cancel'
+};
+
+// ── Persistence ────────────────────────────────────────────────────────────
+function loadQueue() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+    catch { return []; }
+}
+function saveQueue() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(S.queue));
+}
+
+// ── DOM refs ───────────────────────────────────────────────────────────────
+const elPlayer    = document.getElementById('tv-player');
+const elQueue     = document.getElementById('tv-queue');
+const elPicker    = document.getElementById('tv-cmdpicker');
+const elConfig    = document.getElementById('tv-cmdconfig');
+const elMedia     = document.getElementById('tv-media');
+const elPlayerBar = document.getElementById('tv-player-bar');
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function mediaTypeFromUrl(url) {
+    const ext = url.split('.').pop().split('?')[0].toLowerCase();
+    if (VIDEO_EXTS.includes(ext)) return 'video';
+    if (AUDIO_EXTS.includes(ext)) return 'audio';
+    return 'video';
+}
+
+function esc(s) {
+    return String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function itemTypeLabel(type) {
+    switch (type) {
+        case 'play_file':      return 'FILE';
+        case 'play_folder':    return 'FOLDER';
+        case 'random_folder':  return '🎲 RANDOM';
+        case 'loop':           return '↺ LOOP';
+        case 'clear':          return '⊘ CLEAR';
+        default:               return type.toUpperCase();
+    }
+}
+
+function queueItemLabel(item) {
+    return item.label || '—';
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// ── Render: Player ─────────────────────────────────────────────────────────
+function renderPlayer() {
+    // media element managed by playMedia / closeMedia — only update bar
+    const item = S.currentPlaying >= 0 ? S.queue[S.currentPlaying] : null;
+    if (item) {
+        elPlayerBar.innerHTML = `
+            <span class="player-bar-title">${esc(item.label)}</span>
+            <span class="player-hint">Enter=play/pause &nbsp; ◀▶=seek 10s &nbsp; ↓=queue</span>
+        `;
+    } else {
+        elPlayerBar.innerHTML = `<span class="player-hint">Nothing playing &nbsp; ↓=queue</span>`;
+    }
+}
+
+// ── Render: Queue ──────────────────────────────────────────────────────────
+function renderQueue() {
+    const rows = S.queue.length === 0
+        ? `<div class="queue-empty-hint">Queue is empty — press ▶ on a focused row to start, ▶ to add an item</div>`
+        : S.queue.map((item, idx) => {
+            const focused  = idx === S.queueFocus && S.zone === 'queue' ? ' is-focused' : '';
+            const playing  = idx === S.currentPlaying ? ' is-playing' : '';
+            const undef    = item.type === 'undefined' ? ' is-undefined' : '';
+            const badge    = item.type === 'undefined'
+                ? `<span class="queue-row-badge">— select —</span>`
+                : `<span class="queue-row-badge${idx === S.currentPlaying ? ' badge-playing' : ''}">${itemTypeLabel(item.type)}</span>`;
+            return `
+            <div class="queue-row${focused}${playing}${undef}" data-idx="${idx}">
+                <span class="queue-row-num">${idx + 1}</span>
+                <span class="queue-row-label">${esc(queueItemLabel(item))}</span>
+                ${badge}
+            </div>`;
+        }).join('');
+
+    elQueue.querySelector('.tv-queue-rows').innerHTML = rows;
+
+    // scroll focused row into view
+    const focusedEl = elQueue.querySelector('.queue-row.is-focused');
+    if (focusedEl) focusedEl.scrollIntoView({ block: 'nearest' });
+}
+
+// ── Render: Command picker ─────────────────────────────────────────────────
+const COMMANDS = [
+    { id: 'play_file',     label: '▶ Play file' },
+    { id: 'play_folder',   label: '📂 Play from folder' },
+    { id: 'random_folder', label: '🎲 Random from folder' },
+    { id: 'loop',          label: '↺ Loop N times' },
+    { id: 'clear',         label: '⊘ Clear queue here' },
+];
+
+function renderCmdPicker() {
+    const opts = COMMANDS.map((cmd, idx) => {
+        const focused = idx === S.cmdFocus ? ' is-focused' : '';
+        return `<div class="cmd-option${focused}" data-idx="${idx}">${esc(cmd.label)}</div>`;
+    }).join('');
+    elPicker.querySelector('.cmd-options').innerHTML = opts;
+}
+
+// ── Render: Command config ─────────────────────────────────────────────────
+function renderCmdConfig() {
+    if (S.pendingCmd === 'loop') {
+        renderLoopPicker();
+    } else if (S.pendingCmd === 'play_file' || S.pendingCmd === 'play_folder' || S.pendingCmd === 'random_folder') {
+        renderBrowser();
+    }
+}
+
+function renderLoopPicker() {
+    const val  = S.loopCount === 0 ? '∞' : String(S.loopCount);
+    const hint = S.loopCount === 0 ? 'Loops forever' : `Loops ${S.loopCount} time${S.loopCount === 1 ? '' : 's'}';
+    const confirmFocused = S.loopFocus === 'confirm' ? ' is-focused' : '';
+    const cancelFocused  = S.loopFocus === 'cancel'  ? ' is-focused' : '';
+
+    elConfig.querySelector('.tv-cmdconfig-body').innerHTML = `
+        <div class="loop-picker">
+            <div class="loop-picker-label">Loop how many times? (0 = forever)</div>
+            <div class="loop-picker-value">${val}</div>
+            <div class="loop-picker-hint">${hint}</div>
+            <div class="loop-picker-actions">
+                <div class="loop-btn${confirmFocused}" id="loop-confirm">Confirm</div>
+                <div class="loop-btn${cancelFocused}"  id="loop-cancel">Cancel</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderBrowser() {
+    const b = S.browser;
+    const crumbHtml = buildBreadcrumbHtml(b.path);
+
+    const searchFocused = b.focus === 0 ? ' is-focused' : '';
+
+    let selectRowHtml = '';
+    if (b.selectRowVisible) {
+        const sf = b.focus === -1 ? ' is-focused' : '';
+        selectRowHtml = `<div class="browser-select-row${sf}" id="browser-select-row">${esc(b.selectRowLabel)}</div>`;
+    }
+
+    const gridHtml = b.items.length === 0
+        ? '<div class="helper">No items here.</div>'
+        : b.items.map((item, idx) => {
+            // focus index: 0 = search, -1 = select row, 1..N = grid items
+            const fi = idx + 1;
+            const focused = b.focus === fi ? ' is-focused' : '';
+            const thumbHtml = item.thumbnail_url
+                ? `<img class="thumb" src="${esc(item.thumbnail_url)}" alt="${esc(item.label)}">`
+                : `<div class="thumb placeholder">${item.item_type === 'folder' ? 'Folder' : item.item_type === 'video' ? 'Video' : 'Audio'}</div>`;
+            const subtitle = item.item_type === 'folder' ? 'Folder' : 'Play in browser';
+            return `
+            <div class="browser-card${focused}" data-idx="${idx}">
+                ${thumbHtml}
+                <div class="card-meta">
+                    <h3>${esc(item.label)}</h3>
+                    <p>${subtitle}</p>
+                </div>
+            </div>`;
+        }).join('');
+
+    elConfig.querySelector('.tv-cmdconfig-body').innerHTML = `
+        <div class="browser-search-row">
+            <input class="browser-search-input${searchFocused}" id="browser-search"
+                   type="search" placeholder="Search…" value="${esc(b.searchQuery)}">
+        </div>
+        <div class="browser-breadcrumb">${crumbHtml}</div>
+        ${selectRowHtml}
+        <div class="browser-grid" id="browser-grid">${gridHtml}</div>
+    `;
+
+    // wire search input
+    const inp = document.getElementById('browser-search');
+    if (inp) {
+        if (b.focus === 0) inp.focus();
+        inp.addEventListener('input', e => {
+            S.browser.searchQuery = e.target.value;
+            fetchBrowser(b.path, e.target.value);
+        });
+        inp.addEventListener('keydown', e => {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                S.browser.focus = b.selectRowVisible ? -1 : 1;
+                renderCmdConfig();
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                inp.value = '';
+                S.browser.searchQuery = '';
+                fetchBrowser(b.path, '');
+            }
+        });
+    }
+
+    // scroll focused card into view
+    const focusedCard = elConfig.querySelector('.browser-card.is-focused');
+    if (focusedCard) focusedCard.scrollIntoView({ block: 'nearest' });
+    const focusedSelect = elConfig.querySelector('.browser-select-row.is-focused');
+    if (focusedSelect) focusedSelect.scrollIntoView({ block: 'nearest' });
+}
+
+function buildBreadcrumbHtml(path) {
+    const parts = path ? path.split('/').filter(Boolean) : [];
+    let html = `<span>Root</span>`;
+    let running = '';
+    for (const part of parts) {
+        running += (running ? '/' : '') + part;
+        html += ` <span>/</span> <span>${esc(part)}</span>`;
+    }
+    return html;
+}
+
+// ── Full re-render ─────────────────────────────────────────────────────────
+function renderAll() {
+    renderPlayer();
+    renderQueue();
+    if (S.zone === 'cmdpicker' || S.zone === 'cmdconfig') {
+        elPicker.classList.add('is-visible');
+        renderCmdPicker();
+    } else {
+        elPicker.classList.remove('is-visible');
+    }
+    if (S.zone === 'cmdconfig') {
+        elConfig.classList.add('is-visible');
+        renderCmdConfig();
+    } else {
+        elConfig.classList.remove('is-visible');
+    }
+
+    // scroll active zone into view
+    if (S.zone === 'player')    elPlayer.scrollIntoView({ block: 'nearest' });
+    if (S.zone === 'queue')     elQueue.scrollIntoView({ block: 'nearest' });
+    if (S.zone === 'cmdpicker') elPicker.scrollIntoView({ block: 'nearest' });
+    if (S.zone === 'cmdconfig') elConfig.scrollIntoView({ block: 'nearest' });
+}
+
+// ── Queue execution engine ─────────────────────────────────────────────────
+function executeNext() {
+    if (S.currentPlaying < 0 || S.currentPlaying >= S.queue.length) {
+        S.currentPlaying = -1;
+        renderAll();
         return;
     }
 
-    const parentHref = document.body.getAttribute('data-parent-href') || '';
-    let selectedIndex = 0;
+    renderQueue();
+    const item = S.queue[S.currentPlaying];
 
-    const isTypingTarget = () => {
-        const active = document.activeElement;
-        if (!active) {
-            return false;
-        }
-
-        if (active.matches('input, textarea, select')) {
-            return true;
-        }
-
-        return active.getAttribute('contenteditable') === 'true';
-    };
-
-    const setSelected = (index) => {
-        if (!Number.isInteger(index) || index < 0 || index >= items.length) {
-            return;
-        }
-
-        items[selectedIndex].classList.remove('is-selected');
-        selectedIndex = index;
-        items[selectedIndex].classList.add('is-selected');
-        items[selectedIndex].scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    };
-
-    const openSelected = () => {
-        const href = items[selectedIndex].getAttribute('href');
-        if (href) {
-            window.location.assign(href);
-        }
-    };
-
-    const verticalNeighbor = (direction) => {
-        const currentRect = items[selectedIndex].getBoundingClientRect();
-        const currentCenterX = currentRect.left + currentRect.width / 2;
-        const currentCenterY = currentRect.top + currentRect.height / 2;
-        let bestIndex = selectedIndex;
-        let bestScore = Number.POSITIVE_INFINITY;
-
-        items.forEach((item, idx) => {
-            if (idx === selectedIndex) {
-                return;
-            }
-
-            const rect = item.getBoundingClientRect();
-            const centerX = rect.left + rect.width / 2;
-            const centerY = rect.top + rect.height / 2;
-            const verticalDelta = centerY - currentCenterY;
-
-            if (direction === 'up' && verticalDelta >= -2) {
-                return;
-            }
-
-            if (direction === 'down' && verticalDelta <= 2) {
-                return;
-            }
-
-            const verticalDistance = Math.abs(verticalDelta);
-            const horizontalDistance = Math.abs(centerX - currentCenterX);
-            const score = verticalDistance * 4 + horizontalDistance;
-
-            if (score < bestScore) {
-                bestScore = score;
-                bestIndex = idx;
-            }
+    if (item.type === 'play_file' || item.type === 'play_folder') {
+        playMedia(item.url, item.label);
+    } else if (item.type === 'random_folder') {
+        fetchRandom(item.path).then(resolved => {
+            if (resolved) playMedia(resolved.url, resolved.label);
+            else { S.currentPlaying++; executeNext(); }
         });
-
-        return bestIndex;
-    };
-
-    items.forEach((item, idx) => {
-        item.addEventListener('mouseenter', () => setSelected(idx));
-        item.addEventListener('focus', () => setSelected(idx));
-    });
-
-    setSelected(0);
-
-    document.addEventListener('keydown', (event) => {
-        if (isTypingTarget()) {
-            return;
+    } else if (item.type === 'loop') {
+        const n = item.loopCount;
+        if (n === 0) {
+            // infinite — jump to start
+            S.currentPlaying = 0;
+            executeNext();
+        } else {
+            item._loopsDone = (item._loopsDone || 0) + 1;
+            if (item._loopsDone < n) {
+                S.currentPlaying = 0;
+                executeNext();
+            } else {
+                item._loopsDone = 0;
+                S.currentPlaying++;
+                executeNext();
+            }
         }
-
-        switch (event.key) {
-            case 'ArrowLeft':
-                event.preventDefault();
-                setSelected(Math.max(0, selectedIndex - 1));
-                break;
-            case 'ArrowRight':
-                event.preventDefault();
-                setSelected(Math.min(items.length - 1, selectedIndex + 1));
-                break;
-            case 'ArrowUp':
-                event.preventDefault();
-                setSelected(verticalNeighbor('up'));
-                break;
-            case 'ArrowDown':
-                event.preventDefault();
-                setSelected(verticalNeighbor('down'));
-                break;
-            case 'Enter':
-                event.preventDefault();
-                openSelected();
-                break;
-            case 'Backspace':
-                if (parentHref) {
-                    event.preventDefault();
-                    window.location.assign(parentHref);
-                }
-                break;
-            default:
-                break;
-        }
-    });
-})();
-"#;
-
-const QUEUE_SCRIPT: &str = r#"
-(() => {
-    // ── Constants ────────────────────────────────────────────────
-    const STORAGE_KEY = 'sapling_queue';
-    const VIDEO_EXTS = ['m4v','mp4','webm','mkv','mov','avi'];
-    const AUDIO_EXTS = ['mp3','m4a','aac','ogg','opus','wav','flac'];
-
-    // ── State ────────────────────────────────────────────────────
-    let queue = loadQueue();
-    let currentIndex = -1;
-    let overlayMinimized = false;
-
-    // ── Persistence ──────────────────────────────────────────────
-    function loadQueue() {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
-        catch { return []; }
-    }
-
-    function saveQueue() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(queue));
-    }
-
-    // ── DOM refs (injected by page_shell) ────────────────────────
-    const panel     = document.getElementById('sapling-queue-panel');
-    const overlay   = document.getElementById('sapling-player-overlay');
-    const ctxMenu   = document.getElementById('sapling-ctx-menu');
-
-    if (!panel || !overlay || !ctxMenu) return;
-
-    // ── Media type helpers ───────────────────────────────────────
-    function mediaTypeFromUrl(url) {
-        const ext = url.split('.').pop().split('?')[0].toLowerCase();
-        if (VIDEO_EXTS.includes(ext)) return 'video';
-        if (AUDIO_EXTS.includes(ext)) return 'audio';
-        return 'video';
-    }
-
-    // ── Queue execution ──────────────────────────────────────────
-    function startQueue(fromIndex) {
-        currentIndex = fromIndex != null ? fromIndex : 0;
+    } else if (item.type === 'clear') {
+        S.queue = [];
+        S.currentPlaying = -1;
+        saveQueue();
+        closeMedia();
+        renderAll();
+    } else {
+        S.currentPlaying++;
         executeNext();
     }
+}
 
-    function executeNext() {
-        if (currentIndex < 0 || currentIndex >= queue.length) {
-            currentIndex = -1;
-            renderPanel();
-            return;
-        }
+async function fetchRandom(path) {
+    try {
+        const r = await fetch('/api/list?path=' + encodeURIComponent(path));
+        if (!r.ok) return null;
+        const items = await r.json();
+        const playable = items.filter(i => i.item_type === 'video' || i.item_type === 'audio');
+        if (!playable.length) return null;
+        return playable[Math.floor(Math.random() * playable.length)];
+    } catch { return null; }
+}
 
-        renderPanel();
-        const item = queue[currentIndex];
+// ── Media playback ─────────────────────────────────────────────────────────
+function playMedia(url, label) {
+    const type = mediaTypeFromUrl(url);
+    const el = document.createElement(type);
+    el.controls = false; // we handle keys
+    el.autoplay = true;
+    el.preload  = 'auto';
+    el.src = url;
+    el.id = 'tv-media-el';
 
-        if (item.type === 'media') {
-            playMedia(item.url, item.label);
-        } else if (item.type === 'random_from_folder') {
-            resolveRandomFromFolder(item.path).then(resolved => {
-                if (resolved) {
-                    playMedia(resolved.url, resolved.label);
-                } else {
-                    currentIndex++;
-                    executeNext();
-                }
-            });
-        } else if (item.type === 'loop') {
-            currentIndex = 0;
-            executeNext();
-        } else if (item.type === 'clear') {
-            queue = [];
-            currentIndex = -1;
-            saveQueue();
-            closeOverlay();
-            renderPanel();
+    el.addEventListener('ended', () => {
+        S.currentPlaying++;
+        executeNext();
+    });
+
+    elMedia.innerHTML = '';
+    elMedia.appendChild(el);
+
+    document.getElementById('player-placeholder')?.remove();
+    renderPlayer();
+}
+
+function closeMedia() {
+    const el = elMedia.querySelector('video, audio');
+    if (el) { el.pause(); el.src = ''; }
+    elMedia.innerHTML = '<div class="player-placeholder" id="player-placeholder">Sapling</div>';
+    renderPlayer();
+}
+
+function currentMediaEl() {
+    return elMedia.querySelector('video, audio');
+}
+
+// ── Browser fetch ──────────────────────────────────────────────────────────
+async function fetchBrowser(path, query) {
+    const url = '/api/list?path=' + encodeURIComponent(path || '')
+        + (query ? '&q=' + encodeURIComponent(query) : '');
+    try {
+        const r = await fetch(url);
+        if (!r.ok) return;
+        const items = await r.json();
+        // Augment with thumbnail_url for video items
+        S.browser.items = items;
+        S.browser.path  = path || '';
+        updateSelectRow();
+        renderCmdConfig();
+    } catch {}
+}
+
+function updateSelectRow() {
+    const b = S.browser;
+    const cmd = S.pendingCmd;
+    if (cmd === 'play_folder' || cmd === 'random_folder') {
+        const videos = b.items.filter(i => i.item_type === 'video').length;
+        const audios = b.items.filter(i => i.item_type === 'audio').length;
+        const parts = [];
+        if (videos > 0) parts.push(`Select ${videos} video file${videos !== 1 ? 's' : ''} from this folder`);
+        if (audios > 0) parts.push(`Select ${audios} audio file${audios !== 1 ? 's' : ''} from this folder`);
+        if (parts.length > 0) {
+            b.selectRowVisible = true;
+            b.selectRowLabel   = parts.join(' / ');
+            b.selectRowValue   = { path: b.path };
         } else {
-            currentIndex++;
-            executeNext();
+            b.selectRowVisible = false;
         }
+    } else {
+        b.selectRowVisible = false;
+    }
+}
+
+// ── Confirm selection from browser ────────────────────────────────────────
+function confirmBrowserSelection(item) {
+    let queueItem = null;
+
+    if (S.pendingCmd === 'play_file') {
+        queueItem = { type: 'play_file', url: item.url, label: item.label };
+    } else if (S.pendingCmd === 'play_folder') {
+        queueItem = { type: 'play_folder', url: item.url, label: item.label, path: item.path };
+    } else if (S.pendingCmd === 'random_folder') {
+        queueItem = { type: 'random_folder', path: item.path, label: '🎲 ' + item.label };
     }
 
-    async function resolveRandomFromFolder(path) {
-        try {
-            const resp = await fetch('/api/list?path=' + encodeURIComponent(path));
-            if (!resp.ok) return null;
-            const items = await resp.json();
-            const playable = items.filter(i => i.item_type === 'video' || i.item_type === 'audio');
-            if (playable.length === 0) return null;
-            return playable[Math.floor(Math.random() * playable.length)];
-        } catch {
-            return null;
-        }
+    if (!queueItem) return;
+    replaceUndefinedItem(queueItem);
+}
+
+function confirmSelectRow() {
+    const b = S.browser;
+    let queueItem = null;
+
+    if (S.pendingCmd === 'play_folder') {
+        queueItem = { type: 'play_folder', path: b.path, label: '📂 ' + (b.path.split('/').pop() || 'Root') };
+    } else if (S.pendingCmd === 'random_folder') {
+        queueItem = { type: 'random_folder', path: b.path, label: '🎲 ' + (b.path.split('/').pop() || 'Root') };
     }
 
-    // ── Player overlay ───────────────────────────────────────────
-    function buildOverlay() {
-        overlay.innerHTML = `
-            <div class="overlay-header" id="sapling-overlay-header">
-                <span class="overlay-title" id="sapling-overlay-title">—</span>
-                <button class="overlay-btn" id="sapling-overlay-minimize" title="Minimize">—</button>
-                <button class="overlay-btn" id="sapling-overlay-close" title="Close">✕</button>
-            </div>
-            <div class="overlay-media-wrap" id="sapling-overlay-media"></div>
-        `;
+    if (queueItem) replaceUndefinedItem(queueItem);
+}
 
-        document.getElementById('sapling-overlay-minimize').addEventListener('click', () => {
-            overlayMinimized = !overlayMinimized;
-            overlay.classList.toggle('is-minimized', overlayMinimized);
-            document.getElementById('sapling-overlay-minimize').textContent = overlayMinimized ? '□' : '—';
-        });
-
-        document.getElementById('sapling-overlay-close').addEventListener('click', () => {
-            closeOverlay();
-            currentIndex = -1;
-            renderPanel();
-        });
-
-        makeDraggable(overlay, document.getElementById('sapling-overlay-header'));
+function replaceUndefinedItem(queueItem) {
+    if (S.pendingIdx >= 0 && S.pendingIdx < S.queue.length) {
+        S.queue[S.pendingIdx] = queueItem;
+    } else {
+        S.queue.push(queueItem);
+        S.pendingIdx = S.queue.length - 1;
     }
+    saveQueue();
+    S.queueFocus  = S.pendingIdx;
+    S.pendingIdx  = -1;
+    S.pendingCmd  = null;
+    S.zone        = 'queue';
+    elPicker.classList.remove('is-visible');
+    elConfig.classList.remove('is-visible');
+    renderAll();
+}
 
-    function playMedia(url, label) {
-        const type = mediaTypeFromUrl(url);
-        const mediaWrap = document.getElementById('sapling-overlay-media');
-        const titleEl   = document.getElementById('sapling-overlay-title');
-
-        titleEl.textContent = label;
-
-        const el = document.createElement(type);
-        el.controls = true;
-        el.autoplay = true;
-        el.preload  = 'metadata';
-        el.src = url;
-
-        el.addEventListener('ended', () => {
-            currentIndex++;
-            executeNext();
-        });
-
-        mediaWrap.innerHTML = '';
-        mediaWrap.appendChild(el);
-
-        overlay.hidden = false;
-        overlayMinimized = false;
-        overlay.classList.remove('is-minimized');
-        document.getElementById('sapling-overlay-minimize').textContent = '—';
+// ── Cancel configuration ───────────────────────────────────────────────────
+function cancelConfig() {
+    // remove the [undefined] item that triggered this
+    if (S.pendingIdx >= 0 && S.pendingIdx < S.queue.length
+        && S.queue[S.pendingIdx].type === 'undefined') {
+        S.queue.splice(S.pendingIdx, 1);
+        if (S.currentPlaying > S.pendingIdx) S.currentPlaying--;
+        S.queueFocus = clamp(S.pendingIdx, 0, Math.max(0, S.queue.length - 1));
     }
+    S.pendingIdx = -1;
+    S.pendingCmd = null;
+    S.zone       = 'queue';
+    elPicker.classList.remove('is-visible');
+    elConfig.classList.remove('is-visible');
+    saveQueue();
+    renderAll();
+}
 
-    function closeOverlay() {
-        const mediaWrap = document.getElementById('sapling-overlay-media');
-        if (mediaWrap) {
-            const el = mediaWrap.querySelector('video, audio');
-            if (el) { el.pause(); el.src = ''; }
-            mediaWrap.innerHTML = '';
-        }
-        overlay.hidden = true;
+// ── Vertical grid navigation ───────────────────────────────────────────────
+function gridNeighbor(direction, currentFocusIdx, items) {
+    // focus 1..N maps to items 0..N-1
+    const idx = currentFocusIdx - 1;
+    if (idx < 0 || idx >= items.length) return currentFocusIdx;
+
+    const grid = document.getElementById('browser-grid');
+    if (!grid) return currentFocusIdx;
+    const cards = Array.from(grid.querySelectorAll('.browser-card'));
+    if (!cards[idx]) return currentFocusIdx;
+
+    const cur = cards[idx].getBoundingClientRect();
+    const cx  = cur.left + cur.width  / 2;
+    const cy  = cur.top  + cur.height / 2;
+    let best = -1, bestScore = Infinity;
+
+    cards.forEach((card, i) => {
+        if (i === idx) return;
+        const r  = card.getBoundingClientRect();
+        const rx = r.left + r.width  / 2;
+        const ry = r.top  + r.height / 2;
+        const dy = ry - cy;
+        if (direction === 'up'   && dy >= -2) return;
+        if (direction === 'down' && dy <=  2) return;
+        const score = Math.abs(dy) * 4 + Math.abs(rx - cx);
+        if (score < bestScore) { bestScore = score; best = i; }
+    });
+
+    return best >= 0 ? best + 1 : currentFocusIdx;
+}
+
+// ── Key dispatch ───────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+    const tag = document.activeElement?.tagName;
+    const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
+
+    // let the search input handle its own keys (except Escape/ArrowDown handled in renderBrowser)
+    if (isInput && e.key !== 'Escape' && e.key !== 'ArrowDown') return;
+
+    switch (S.zone) {
+        case 'player':    handlePlayerKey(e); break;
+        case 'queue':     handleQueueKey(e);  break;
+        case 'cmdpicker': handlePickerKey(e); break;
+        case 'cmdconfig': handleConfigKey(e); break;
     }
+});
 
-    // ── Draggable overlay ────────────────────────────────────────
-    function makeDraggable(el, handle) {
-        let startX, startY, startLeft, startTop;
-
-        handle.addEventListener('mousedown', e => {
-            if (e.target.tagName === 'BUTTON') return;
+function handlePlayerKey(e) {
+    const el = currentMediaEl();
+    switch (e.key) {
+        case 'ArrowDown':
             e.preventDefault();
-            const rect = el.getBoundingClientRect();
-            startX = e.clientX;
-            startY = e.clientY;
-            startLeft = rect.left;
-            startTop  = rect.top;
-
-            el.style.right = 'auto';
-
-            const onMove = e => {
-                el.style.left = Math.max(0, startLeft + e.clientX - startX) + 'px';
-                el.style.top  = Math.max(0, startTop  + e.clientY - startY) + 'px';
-            };
-            const onUp = () => {
-                document.removeEventListener('mousemove', onMove);
-                document.removeEventListener('mouseup', onUp);
-            };
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-        });
+            S.zone = 'queue';
+            S.queueFocus = clamp(S.queueFocus, 0, Math.max(0, S.queue.length - 1));
+            renderAll();
+            break;
+        case 'Enter':
+            e.preventDefault();
+            if (el) { if (el.paused) el.play(); else el.pause(); }
+            break;
+        case 'ArrowLeft':
+            e.preventDefault();
+            if (el) el.currentTime = Math.max(0, el.currentTime - 10);
+            break;
+        case 'ArrowRight':
+            e.preventDefault();
+            if (el) el.currentTime = el.currentTime + 10;
+            break;
     }
+}
 
-    // ── Queue panel rendering ────────────────────────────────────
-    function renderPanel() {
-        document.body.classList.add('has-queue');
+function handleQueueKey(e) {
+    const len = S.queue.length;
 
-        const nowPlaying = currentIndex >= 0 && currentIndex < queue.length
-            ? queue[currentIndex].label
-            : '';
-
-        const isOpen = panel.classList.contains('is-open');
-
-        let itemsHtml = '';
-        if (queue.length === 0) {
-            itemsHtml = '<div class="queue-empty">Queue is empty. Right-click media to add items.</div>';
-        } else {
-            queue.forEach((item, idx) => {
-                const active  = idx === currentIndex ? ' is-active' : '';
-                const typeTag = typeLabel(item.type);
-                const upDis   = idx === 0 ? ' disabled' : '';
-                const downDis = idx === queue.length - 1 ? ' disabled' : '';
-                itemsHtml += `
-                <div class="queue-item${active}" data-idx="${idx}">
-                    <span class="queue-item-index">${idx + 1}</span>
-                    <span class="queue-item-label" title="${escHtml(item.label)}">${escHtml(item.label)}</span>
-                    <span class="queue-item-type">${typeTag}</span>
-                    <button class="queue-item-btn q-up"${upDis} data-idx="${idx}" title="Move up">↑</button>
-                    <button class="queue-item-btn q-down"${downDis} data-idx="${idx}" title="Move down">↓</button>
-                    <button class="queue-item-btn q-remove" data-idx="${idx}" title="Remove">✕</button>
-                </div>`;
-            });
-        }
-
-        panel.innerHTML = `
-            <div class="queue-header">
-                <span class="queue-header-title">Queue (${queue.length})</span>
-                ${nowPlaying ? `<span class="queue-now-playing">▶ ${escHtml(nowPlaying)}</span>` : ''}
-                <button class="queue-btn" id="sapling-q-play" title="Play queue from start">▶ Play</button>
-                <button class="queue-btn" id="sapling-q-clear" title="Clear queue">Clear</button>
-                <button class="queue-btn" id="sapling-q-toggle">${isOpen ? '▼' : '▲'}</button>
-            </div>
-            <div class="queue-list" id="sapling-queue-list">${itemsHtml}</div>
-        `;
-
-        document.getElementById('sapling-q-toggle').addEventListener('click', () => {
-            panel.classList.toggle('is-open');
-            renderPanel();
-        });
-
-        document.getElementById('sapling-q-play').addEventListener('click', () => {
-            if (queue.length > 0) startQueue(0);
-        });
-
-        document.getElementById('sapling-q-clear').addEventListener('click', () => {
-            queue = [];
-            currentIndex = -1;
-            saveQueue();
-            closeOverlay();
-            renderPanel();
-        });
-
-        document.getElementById('sapling-queue-list').addEventListener('click', e => {
-            const btn = e.target.closest('button');
-            if (!btn) return;
-            const idx = parseInt(btn.dataset.idx, 10);
-
-            if (btn.classList.contains('q-remove')) {
-                if (idx < currentIndex) currentIndex--;
-                else if (idx === currentIndex) { closeOverlay(); currentIndex = -1; }
-                queue.splice(idx, 1);
-                saveQueue();
-                renderPanel();
-            } else if (btn.classList.contains('q-up') && idx > 0) {
-                [queue[idx - 1], queue[idx]] = [queue[idx], queue[idx - 1]];
-                if (currentIndex === idx) currentIndex--;
-                else if (currentIndex === idx - 1) currentIndex++;
-                saveQueue();
-                renderPanel();
-            } else if (btn.classList.contains('q-down') && idx < queue.length - 1) {
-                [queue[idx + 1], queue[idx]] = [queue[idx], queue[idx + 1]];
-                if (currentIndex === idx) currentIndex++;
-                else if (currentIndex === idx + 1) currentIndex--;
-                saveQueue();
-                renderPanel();
+    switch (e.key) {
+        case 'ArrowUp':
+            e.preventDefault();
+            if (S.queueFocus <= 0) {
+                S.zone = 'player';
+                renderAll();
+            } else {
+                S.queueFocus--;
+                renderQueue();
             }
-        });
-    }
+            break;
 
-    function typeLabel(type) {
-        switch (type) {
-            case 'video':              return 'VIDEO';
-            case 'audio':              return 'AUDIO';
-            case 'random_from_folder': return '🎲 RANDOM';
-            case 'loop':               return '↺ LOOP';
-            case 'clear':              return '⊘ CLEAR';
-            default:                   return type.toUpperCase();
-        }
-    }
+        case 'ArrowDown':
+            e.preventDefault();
+            if (S.queueFocus < len - 1) {
+                S.queueFocus++;
+                renderQueue();
+            }
+            // if cmdpicker is open, move focus there
+            else if (S.zone === 'queue' && elPicker.classList.contains('is-visible')) {
+                S.zone = 'cmdpicker';
+                renderAll();
+            }
+            break;
 
-    function escHtml(str) {
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-    }
+        case 'ArrowRight':
+            e.preventDefault();
+            if (len === 0 || S.queueFocus >= len - 1) {
+                // append undefined at end
+                insertUndefinedAt(len);
+            } else {
+                // insert undefined after current focus
+                insertUndefinedAt(S.queueFocus + 1);
+            }
+            break;
 
-    // ── Context menu ─────────────────────────────────────────────
-    function buildCtxMenu() {
-        ctxMenu.innerHTML = '';
-    }
-
-    function showCtxMenu(x, y, items) {
-        ctxMenu.innerHTML = items.map(item => {
-            if (item === 'sep') return '<div class="ctx-separator"></div>';
-            return `<button class="ctx-item" data-action="${escHtml(item.action)}">${escHtml(item.label)}</button>`;
-        }).join('');
-
-        // Position — flip if off-screen
-        ctxMenu.hidden = false;
-        const vw = window.innerWidth, vh = window.innerHeight;
-        const w = ctxMenu.offsetWidth, h = ctxMenu.offsetHeight;
-        ctxMenu.style.left = (x + w > vw ? vw - w - 4 : x) + 'px';
-        ctxMenu.style.top  = (y + h > vh ? vh - h - 4 : y) + 'px';
-    }
-
-    function hideCtxMenu() {
-        ctxMenu.hidden = true;
-    }
-
-    document.addEventListener('click', hideCtxMenu);
-    document.addEventListener('scroll', hideCtxMenu, true);
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') hideCtxMenu(); });
-
-    document.addEventListener('contextmenu', e => {
-        const card = e.target.closest('[data-media-url],[data-folder-path]');
-        if (!card) return;
-        e.preventDefault();
-
-        if (card.dataset.folderPath !== undefined) {
-            // Folder card
-            const path  = card.dataset.folderPath;
-            const label = card.dataset.folderLabel || path;
-
-            showCtxMenu(e.clientX, e.clientY, [
-                { label: '🎲 Add one random from here', action: 'random:' + path + '|' + label },
-                { label: '📂 Add all media from here',  action: 'addall:' + path + '|' + label },
-                'sep',
-                { label: '↺ Insert: loop to start',     action: 'loop' },
-                { label: '⊘ Insert: clear queue',        action: 'insertclear' },
-            ]);
-        } else if (card.dataset.mediaUrl !== undefined) {
-            // Media card
-            const url   = card.dataset.mediaUrl;
-            const lbl   = card.dataset.mediaLabel || url;
-            const type  = card.dataset.mediaType  || 'video';
-
-            showCtxMenu(e.clientX, e.clientY, [
-                { label: '+ Add to queue',  action: 'add:' + url + '|' + lbl + '|' + type },
-                { label: '⏭ Play next',     action: 'next:' + url + '|' + lbl + '|' + type },
-                { label: '▶ Play now',      action: 'now:' + url + '|' + lbl + '|' + type },
-            ]);
-        }
-    });
-
-    ctxMenu.addEventListener('click', e => {
-        const btn = e.target.closest('.ctx-item');
-        if (!btn) return;
-        const action = btn.dataset.action;
-        hideCtxMenu();
-        handleCtxAction(action);
-    });
-
-    function handleCtxAction(action) {
-        if (action === 'loop') {
-            queue.push({ type: 'loop', label: '↺ Loop to start' });
-        } else if (action === 'insertclear') {
-            queue.push({ type: 'clear', label: '⊘ Clear queue' });
-        } else if (action.startsWith('random:')) {
-            const [path, label] = action.slice(7).split('|');
-            queue.push({ type: 'random_from_folder', path, label: '🎲 ' + label });
-        } else if (action.startsWith('addall:')) {
-            const [path, label] = action.slice(7).split('|');
-            // Fetch and append all playable items from folder
-            fetch('/api/list?path=' + encodeURIComponent(path)).then(r => r.json()).then(items => {
-                items.filter(i => i.item_type === 'video' || i.item_type === 'audio').forEach(i => {
-                    queue.push({ type: i.item_type, url: i.url, label: i.label });
-                });
+        case 'ArrowLeft':
+            e.preventDefault();
+            if (len > 0) {
+                const idx = S.queueFocus;
+                if (idx === S.currentPlaying) { closeMedia(); S.currentPlaying = -1; }
+                else if (idx < S.currentPlaying) S.currentPlaying--;
+                S.queue.splice(idx, 1);
+                S.queueFocus = clamp(idx, 0, Math.max(0, S.queue.length - 1));
                 saveQueue();
-                renderPanel();
-            });
-            return;
-        } else if (action.startsWith('add:')) {
-            const [url, label, type] = action.slice(4).split('|');
-            queue.push({ type, url, label });
-        } else if (action.startsWith('next:')) {
-            const [url, label, type] = action.slice(5).split('|');
-            const insertAt = currentIndex >= 0 ? currentIndex + 1 : queue.length;
-            queue.splice(insertAt, 0, { type, url, label });
-        } else if (action.startsWith('now:')) {
-            const [url, label, type] = action.slice(4).split('|');
-            const insertAt = currentIndex >= 0 ? currentIndex : 0;
-            queue.splice(insertAt, 0, { type, url, label });
-            startQueue(insertAt);
-            saveQueue();
-            renderPanel();
-            return;
-        }
+                renderAll();
+            }
+            break;
 
-        saveQueue();
-        renderPanel();
+        case 'Enter':
+            e.preventDefault();
+            if (len === 0) {
+                // Start configuring a new item
+                insertUndefinedAt(0);
+            } else {
+                const item = S.queue[S.queueFocus];
+                if (item && item.type !== 'undefined') {
+                    S.currentPlaying = S.queueFocus;
+                    executeNext();
+                } else if (item && item.type === 'undefined') {
+                    // open picker for this undefined item
+                    S.pendingIdx = S.queueFocus;
+                    S.zone       = 'cmdpicker';
+                    S.cmdFocus   = 0;
+                    renderAll();
+                    elPicker.scrollIntoView({ block: 'nearest' });
+                }
+            }
+            break;
+
+        case 'Backspace':
+            e.preventDefault();
+            // same as left — delete focused item
+            if (len > 0) {
+                const idx = S.queueFocus;
+                if (idx === S.currentPlaying) { closeMedia(); S.currentPlaying = -1; }
+                else if (idx < S.currentPlaying) S.currentPlaying--;
+                S.queue.splice(idx, 1);
+                S.queueFocus = clamp(idx, 0, Math.max(0, S.queue.length - 1));
+                saveQueue();
+                renderAll();
+            }
+            break;
     }
+}
 
-    // ── Init ─────────────────────────────────────────────────────
-    buildOverlay();
-    buildCtxMenu();
-    renderPanel();
+function insertUndefinedAt(idx) {
+    S.queue.splice(idx, 0, { type: 'undefined', label: '—' });
+    if (S.currentPlaying >= idx) S.currentPlaying++;
+    S.queueFocus = idx;
+    S.pendingIdx = idx;
+    S.zone       = 'cmdpicker';
+    S.cmdFocus   = 0;
+    saveQueue();
+    renderAll();
+    elPicker.scrollIntoView({ block: 'nearest' });
+}
+
+function handlePickerKey(e) {
+    switch (e.key) {
+        case 'ArrowLeft':
+            e.preventDefault();
+            S.cmdFocus = Math.max(0, S.cmdFocus - 1);
+            renderCmdPicker();
+            break;
+        case 'ArrowRight':
+            e.preventDefault();
+            S.cmdFocus = Math.min(COMMANDS.length - 1, S.cmdFocus + 1);
+            renderCmdPicker();
+            break;
+        case 'ArrowUp':
+        case 'Backspace':
+            e.preventDefault();
+            cancelConfig();
+            break;
+        case 'Enter': {
+            e.preventDefault();
+            const cmd = COMMANDS[S.cmdFocus];
+            S.pendingCmd = cmd.id;
+
+            if (cmd.id === 'clear') {
+                replaceUndefinedItem({ type: 'clear', label: '⊘ Clear queue' });
+            } else if (cmd.id === 'loop') {
+                S.zone     = 'cmdconfig';
+                S.loopFocus = 'value';
+                renderAll();
+                elConfig.scrollIntoView({ block: 'nearest' });
+            } else {
+                // browser-based config
+                S.browser.path        = '';
+                S.browser.items       = [];
+                S.browser.focus       = 1;
+                S.browser.searchQuery = '';
+                S.zone = 'cmdconfig';
+                renderAll();
+                elConfig.scrollIntoView({ block: 'nearest' });
+                fetchBrowser('', '');
+            }
+            break;
+        }
+    }
+}
+
+function handleConfigKey(e) {
+    if (S.pendingCmd === 'loop') {
+        handleLoopKey(e);
+    } else {
+        handleBrowserKey(e);
+    }
+}
+
+function handleLoopKey(e) {
+    switch (e.key) {
+        case 'ArrowLeft':
+            e.preventDefault();
+            if (S.loopFocus === 'value') {
+                S.loopCount = S.loopCount <= 0 ? 0 : S.loopCount - 1;
+                renderCmdConfig();
+            } else if (S.loopFocus === 'cancel') {
+                S.loopFocus = 'confirm';
+                renderCmdConfig();
+            }
+            break;
+        case 'ArrowRight':
+            e.preventDefault();
+            if (S.loopFocus === 'value') {
+                S.loopCount++;
+                renderCmdConfig();
+            } else if (S.loopFocus === 'confirm') {
+                S.loopFocus = 'cancel';
+                renderCmdConfig();
+            }
+            break;
+        case 'ArrowDown':
+            e.preventDefault();
+            S.loopFocus = 'confirm';
+            renderCmdConfig();
+            break;
+        case 'ArrowUp':
+            e.preventDefault();
+            if (S.loopFocus === 'value') {
+                S.zone = 'cmdpicker';
+                renderAll();
+            } else {
+                S.loopFocus = 'value';
+                renderCmdConfig();
+            }
+            break;
+        case 'Enter':
+            e.preventDefault();
+            if (S.loopFocus === 'cancel') {
+                cancelConfig();
+            } else {
+                // confirm or value row — treat as confirm
+                const n = S.loopCount;
+                const lbl = n === 0 ? '↺ Loop ∞' : `↺ Loop ×${n}`;
+                replaceUndefinedItem({ type: 'loop', label: lbl, loopCount: n });
+            }
+            break;
+        case 'Backspace':
+            e.preventDefault();
+            cancelConfig();
+            break;
+    }
+}
+
+function handleBrowserKey(e) {
+    const b   = S.browser;
+    const len = b.items.length;
+
+    // if search input is focused, let it handle typing; intercept only nav keys
+    if (b.focus === 0) return; // handled by inline listener in renderBrowser
+
+    switch (e.key) {
+        case 'ArrowUp': {
+            e.preventDefault();
+            if (b.focus === -1) {
+                // select row → first grid item
+                b.focus = 1;
+            } else if (b.focus === 1) {
+                // top of grid → search bar
+                b.focus = 0;
+            } else {
+                const nf = gridNeighbor('up', b.focus, b.items);
+                b.focus = nf === b.focus ? 0 : nf;
+            }
+            if (b.focus === 0) {
+                // focus the actual input
+                renderCmdConfig();
+                document.getElementById('browser-search')?.focus();
+                return;
+            }
+            renderCmdConfig();
+            break;
+        }
+        case 'ArrowDown': {
+            e.preventDefault();
+            if (b.focus === -1) {
+                b.focus = 1;
+            } else {
+                const nf = gridNeighbor('down', b.focus, b.items);
+                b.focus = nf;
+            }
+            renderCmdConfig();
+            break;
+        }
+        case 'ArrowLeft': {
+            e.preventDefault();
+            if (b.focus > 1) {
+                b.focus--;
+            } else if (b.focus === 1 && b.selectRowVisible) {
+                b.focus = -1;
+            }
+            renderCmdConfig();
+            break;
+        }
+        case 'ArrowRight': {
+            e.preventDefault();
+            if (b.focus < len) {
+                b.focus++;
+            } else if (b.focus === -1) {
+                b.focus = 1;
+            }
+            renderCmdConfig();
+            break;
+        }
+        case 'Enter': {
+            e.preventDefault();
+            if (b.focus === -1) {
+                // select row confirmed
+                confirmSelectRow();
+                return;
+            }
+            const item = b.items[b.focus - 1];
+            if (!item) return;
+            if (item.item_type === 'folder') {
+                // navigate into folder
+                b.path        = item.path;
+                b.focus       = b.selectRowVisible ? -1 : 1;
+                b.searchQuery = '';
+                fetchBrowser(item.path, '');
+            } else {
+                // file selected
+                if (S.pendingCmd === 'play_file') {
+                    confirmBrowserSelection(item);
+                }
+                // play_folder / random_folder should use select row, not individual files
+            }
+            break;
+        }
+        case 'Backspace': {
+            e.preventDefault();
+            // navigate up
+            const parts = (b.path || '').split('/').filter(Boolean);
+            if (parts.length > 0) {
+                parts.pop();
+                const newPath = parts.join('/');
+                b.path        = newPath;
+                b.focus       = 1;
+                b.searchQuery = '';
+                fetchBrowser(newPath, '');
+            } else {
+                // at root — cancel
+                cancelConfig();
+            }
+            break;
+        }
+    }
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+S.zone       = 'queue';
+S.queueFocus = 0;
+renderAll();
+
+// restore playing state — if queue has a currentPlaying stored we can't
+// auto-resume (media src is gone), so just reset
+S.currentPlaying = -1;
+
 })();
 "#;
 
-fn page_shell(
-    title: &'static str,
-    path: String,
-    search_query: String,
-        parent_href: Option<String>,
-    content: impl IntoView + 'static,
-) -> String {
-        let parent_attr = parent_href.unwrap_or_default();
+// ── Shared simple shell (error / search results) ──────────────────────────
+
+fn simple_shell(title: &'static str, content: impl IntoView + 'static) -> String {
     let html = view! {
         <html lang="en">
             <head>
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
                 <title>{title}</title>
-                <style>{STYLE}</style>
+                <style>{BASE_STYLE}{SIMPLE_STYLE}</style>
             </head>
-                        <body data-parent-href=parent_attr>
-                <main class="app">
-                    <header class="header">
-                        <div class="header-right">
-                            <div class="path">{path}</div>
-                            <div class="search-tools">
-                                <a class="home-button" href="/browse/" aria-label="Home">"⌂"</a>
-                                <form class="search-form" action="/browse/" method="get">
-                                    <input
-                                        class="search-input"
-                                        type="search"
-                                        name="q"
-                                        placeholder="Search all paths"
-                                        value=search_query
-                                    />
-                                </form>
-                            </div>
-                        </div>
-                    </header>
+            <body>
+                <div class="simple-app">
+                    <div class="simple-header">
+                        <a href="/browse/">"⌂ Home"</a>
+                    </div>
                     {content}
-                </main>
-                <div id="sapling-queue-panel" class="queue-panel"></div>
-                <div id="sapling-player-overlay" class="player-overlay" hidden></div>
-                <div id="sapling-ctx-menu" class="ctx-menu" hidden></div>
-                <script>{KEYBOARD_NAV_SCRIPT}</script>
-                <script>{QUEUE_SCRIPT}</script>
+                </div>
             </body>
         </html>
     };
-
     format!("<!DOCTYPE html>{}", html.to_html())
 }
 
-pub fn render_browse_page(
-    breadcrumbs: &[(String, String)],
-    folders: &[FolderEntry],
-    videos: &[VideoEntry],
-    audio_files: &[AudioEntry],
-) -> String {
-    let parent_href = if breadcrumbs.len() > 1 {
-        Some(breadcrumbs[breadcrumbs.len() - 2].1.clone())
-    } else {
-        Some("/browse/".to_string())
+// ── TV shell ──────────────────────────────────────────────────────────────
+
+fn tv_shell(content: impl IntoView + 'static) -> String {
+    let html = view! {
+        <html lang="en">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>"Sapling"</title>
+                <style>{TV_STYLE}</style>
+            </head>
+            <body>
+                <div class="tv-app">
+                    {content}
+                    // Zone 3: command picker (hidden until needed)
+                    <section id="tv-cmdpicker" class="tv-cmdpicker">
+                        <div class="tv-cmdpicker-header">"Select queue command"</div>
+                        <div class="cmd-options"></div>
+                    </section>
+                    // Zone 4: command config (hidden until needed)
+                    <section id="tv-cmdconfig" class="tv-cmdconfig">
+                        <div class="tv-cmdconfig-header">
+                            <span class="tv-cmdconfig-title">"Configure"</span>
+                        </div>
+                        <div class="tv-cmdconfig-body"></div>
+                    </section>
+                </div>
+                <script>{TV_SCRIPT}</script>
+            </body>
+        </html>
     };
+    format!("<!DOCTYPE html>{}", html.to_html())
+}
 
-    let breadcrumb_view = breadcrumbs
-        .iter()
-        .enumerate()
-        .flat_map(|(idx, (label, href))| {
-            let is_last = idx + 1 == breadcrumbs.len();
-            if is_last {
-                vec![view! { <span>{label.clone()}</span> }.into_any()]
-            } else {
-                vec![
-                    view! { <a href=href.clone()>{label.clone()}</a> }.into_any(),
-                    view! { <span>"/"</span> }.into_any(),
-                ]
-            }
-        })
-        .collect_view();
+// ── Public render functions ───────────────────────────────────────────────
 
-    let folder_cards = folders
-        .iter()
-        .map(|folder| {
-            let browse_href = format!("/browse/{}", encode_url_path(&folder.relative_path));
-            let folder_path = folder.relative_path.to_string_lossy().to_string();
-            let thumb_view = match &folder.thumbnail_relative_path {
-                Some(thumbnail) => {
-                    let src = format!("/media/{}", encode_url_path(thumbnail));
-                    view! { <img class="thumb" src=src alt=folder.name.clone()/> }.into_any()
-                }
-                None => view! { <div class="thumb placeholder">"Folder"</div> }.into_any(),
-            };
+pub fn render_browse_page(
+    _breadcrumbs: &[(String, String)],
+    _folders: &[FolderEntry],
+    _videos: &[VideoEntry],
+    _audio_files: &[AudioEntry],
+) -> String {
+    tv_shell(view! {
+        // Zone 1: Player
+        <section id="tv-player" class="tv-player">
+            <div id="tv-media">
+                <div class="player-placeholder" id="player-placeholder">"Sapling"</div>
+            </div>
+            <div id="tv-player-bar" class="player-bar">
+                <span class="player-hint">"Nothing playing &nbsp; ↓=queue"</span>
+            </div>
+        </section>
 
-            view! {
-                <a class="card" href=browse_href data-nav-item
-                   data-folder-path=folder_path
-                   data-folder-label=folder.name.clone()>
-                    {thumb_view}
-                    <div class="meta">
-                        <h3>{folder.name.clone()}</h3>
-                        <p>"Folder"</p>
-                    </div>
-                </a>
-            }
-        })
-        .collect_view();
-
-    let video_cards = videos
-        .iter()
-        .map(|video| {
-            let play_href = format!("/play/{}", encode_url_path(&video.relative_path));
-            let media_url = format!("/media/{}", encode_url_path(&video.relative_path));
-            let thumb_view = match &video.thumbnail_url {
-                Some(thumbnail_url) => {
-                    view! { <img class="thumb" src=thumbnail_url.clone() alt=video.name.clone()/> }.into_any()
-                }
-                None => view! { <div class="thumb placeholder">"Video"</div> }.into_any(),
-            };
-
-            view! {
-                <a class="card" href=play_href data-nav-item
-                   data-media-url=media_url
-                   data-media-label=video.name.clone()
-                   data-media-type="video">
-                    {thumb_view}
-                    <div class="meta">
-                        <h3>{video.name.clone()}</h3>
-                        <p>"Play in browser"</p>
-                    </div>
-                </a>
-            }
-        })
-        .collect_view();
-
-    let audio_cards = audio_files
-        .iter()
-        .map(|audio| {
-            let play_href = format!("/play/{}", encode_url_path(&audio.relative_path));
-            let media_url = format!("/media/{}", encode_url_path(&audio.relative_path));
-
-            view! {
-                <a class="card" href=play_href data-nav-item
-                   data-media-url=media_url
-                   data-media-label=audio.name.clone()
-                   data-media-type="audio">
-                    <div class="thumb placeholder">"Audio"</div>
-                    <div class="meta">
-                        <h3>{audio.name.clone()}</h3>
-                        <p>"Play in browser"</p>
-                    </div>
-                </a>
-            }
-        })
-        .collect_view();
-
-    page_shell(
-        "Sapling Media",
-        String::new(),
-        String::new(),
-        parent_href,
-        view! {
-            <section class="helper">{breadcrumb_view}</section>
-            <section class="grid">{folder_cards}{video_cards}{audio_cards}</section>
-        },
-    )
+        // Zone 2: Queue
+        <section id="tv-queue" class="tv-queue">
+            <div class="tv-queue-header">"Queue"</div>
+            <div class="tv-queue-rows"></div>
+            <div class="queue-hint">"↑↓ navigate &nbsp;·&nbsp; → insert item after &nbsp;·&nbsp; ← delete item &nbsp;·&nbsp; Enter play/configure"</div>
+        </section>
+    })
 }
 
 pub fn render_search_results_page(query: &str, entries: &[SearchEntry]) -> String {
@@ -1205,18 +1514,20 @@ pub fn render_search_results_page(query: &str, entries: &[SearchEntry]) -> Strin
                     SearchEntryKind::Folder => {
                         format!("/browse/{}", encode_url_path(&entry.relative_path))
                     }
-                    SearchEntryKind::Video => format!("/play/{}", encode_url_path(&entry.relative_path)),
-                    SearchEntryKind::Audio => format!("/play/{}", encode_url_path(&entry.relative_path)),
+                    SearchEntryKind::Video | SearchEntryKind::Audio => {
+                        format!("/browse/{}", encode_url_path(
+                            entry.relative_path.parent().unwrap_or(&entry.relative_path)
+                        ))
+                    }
                 };
                 let kind = match entry.kind {
                     SearchEntryKind::Folder => "Folder",
-                    SearchEntryKind::Video => "Video",
-                    SearchEntryKind::Audio => "Audio",
+                    SearchEntryKind::Video  => "Video",
+                    SearchEntryKind::Audio  => "Audio",
                 };
-
                 view! {
                     <li class="results-row">
-                        <a class="results-path" href=href data-nav-item>{entry.relative_path.to_string_lossy().to_string()}</a>
+                        <a class="results-path" href=href>{entry.relative_path.to_string_lossy().to_string()}</a>
                         <span class="results-kind">{kind}</span>
                     </li>
                 }
@@ -1225,85 +1536,28 @@ pub fn render_search_results_page(query: &str, entries: &[SearchEntry]) -> Strin
             .into_any()
     };
 
-    page_shell(
+    simple_shell(
         "Search Results",
-        format!("Search: {}", query),
-        query.to_string(),
-        Some("/browse/".to_string()),
         view! {
-            <section class="results">
+            <h2 style="margin: 0 0 1rem; font-size: 1.1rem;">{format!("Search: {}", query)}</h2>
+            <div class="results">
                 <div class="results-header">{format!("{} match(es)", entries.len())}</div>
                 {if entries.is_empty() {
                     listing
                 } else {
                     view! { <ol class="results-list">{listing}</ol> }.into_any()
                 }}
-            </section>
-        },
-    )
-}
-
-pub fn render_video_page(display_name: String, media_src: String, parent_href: String) -> String {
-    render_player_page(
-        display_name,
-        parent_href,
-        view! {
-            <video controls=true autoplay=true preload="metadata">
-                <source src=media_src/>
-                "Your browser cannot play this video format natively."
-            </video>
-        },
-    )
-}
-
-pub fn render_audio_page(display_name: String, media_src: String, parent_href: String) -> String {
-    render_player_page(
-        display_name,
-        parent_href,
-        view! {
-            <audio controls=true autoplay=true preload="metadata">
-                <source src=media_src/>
-                "Your browser cannot play this audio format natively."
-            </audio>
-        },
-    )
-}
-
-fn render_player_page(
-    display_name: String,
-    parent_href: String,
-    player: impl IntoView + 'static,
-) -> String {
-    let parent_href_clone = parent_href.clone();
-    page_shell(
-        "Now Playing",
-        display_name.clone(),
-        String::new(),
-        Some(parent_href_clone),
-        view! {
-            <section class="player-wrap">
-                <a class="cta" href=parent_href>
-                    "Back to folder"
-                </a>
-            </section>
-            <section class="player-wrap">
-                {player}
-            </section>
+            </div>
         },
     )
 }
 
 pub fn render_not_found(message: String) -> String {
-    page_shell(
+    simple_shell(
         "Not Found",
-        "Error".to_string(),
-        String::new(),
-        Some("/browse/".to_string()),
         view! {
-            <section class="helper">
-                <h2>"Not found"</h2>
-                <p>{message}</p>
-            </section>
+            <h2 style="margin: 0 0 0.5rem;">"Not found"</h2>
+            <p style="color: var(--muted);">{message}</p>
         },
     )
 }
