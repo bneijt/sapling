@@ -87,16 +87,19 @@ a { color: inherit; text-decoration: none; }
 .tv-player {
     position: relative;
     width: 100%;
+    height: 100vh;
     background: #000;
-    min-height: 45vh;
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .tv-player video,
 .tv-player audio {
     width: 100%;
-    max-height: 45vh;
+    height: calc(100vh - 2.4rem);
+    object-fit: contain;
     display: block;
     background: #000;
 }
@@ -104,6 +107,7 @@ a { color: inherit; text-decoration: none; }
 .tv-player audio {
     max-height: unset;
     min-height: 10vh;
+    width: 100%;
 }
 
 .player-placeholder {
@@ -111,7 +115,7 @@ a { color: inherit; text-decoration: none; }
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 45vh;
+    min-height: 0;
     color: var(--muted);
     font-size: 1.4rem;
     font-weight: 700;
@@ -572,7 +576,7 @@ const S = {
     currentPlaying:   -1,        // index of item currently playing
     queueFocus:       0,         // focused row index in queue zone
     pendingIdx:       -1,        // queue index of the [undefined] item being configured
-    pendingCmd:       null,      // 'play_file'|'play_folder'|'random_folder'|'loop'|'clear'
+    pendingCmd:       null,      // 'play_file'|'play_folder'|'random_folder'|'loop'
     cmdFocus:         0,         // focused index in command picker
     // browser sub-state
     browser: {
@@ -626,7 +630,6 @@ function itemTypeLabel(type) {
         case 'play_folder':    return 'FOLDER';
         case 'random_folder':  return '🎲 RANDOM';
         case 'loop':           return '↺ LOOP';
-        case 'clear':          return '⊘ CLEAR';
         default:               return type.toUpperCase();
     }
 }
@@ -683,7 +686,6 @@ const COMMANDS = [
     { id: 'play_folder',   label: '📂 Play from folder' },
     { id: 'random_folder', label: '🎲 Random from folder' },
     { id: 'loop',          label: '↺ Loop N times' },
-    { id: 'clear',         label: '⊘ Clear queue here' },
 ];
 
 function renderCmdPicker() {
@@ -705,7 +707,7 @@ function renderCmdConfig() {
 
 function renderLoopPicker() {
     const val  = S.loopCount === 0 ? '∞' : String(S.loopCount);
-    const hint = S.loopCount === 0 ? 'Loops forever' : `Loops ${S.loopCount} time${S.loopCount === 1 ? '' : 's'}';
+    const hint = S.loopCount === 0 ? 'Loops forever' : `Loops ${S.loopCount} time${S.loopCount === 1 ? '' : 's'}`;
     const confirmFocused = S.loopFocus === 'confirm' ? ' is-focused' : '';
     const cancelFocused  = S.loopFocus === 'cancel'  ? ' is-focused' : '';
 
@@ -864,12 +866,6 @@ function executeNext() {
                 executeNext();
             }
         }
-    } else if (item.type === 'clear') {
-        S.queue = [];
-        S.currentPlaying = -1;
-        saveQueue();
-        closeMedia();
-        renderAll();
     } else {
         S.currentPlaying++;
         executeNext();
@@ -1076,6 +1072,7 @@ function handlePlayerKey(e) {
             S.zone = 'queue';
             S.queueFocus = clamp(S.queueFocus, 0, Math.max(0, S.queue.length - 1));
             renderAll();
+            window.scrollTo({ top: window.innerHeight, behavior: 'smooth' });
             break;
         case 'Enter':
             e.preventDefault();
@@ -1101,6 +1098,7 @@ function handleQueueKey(e) {
             if (S.queueFocus <= 0) {
                 S.zone = 'player';
                 renderAll();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             } else {
                 S.queueFocus--;
                 renderQueue();
@@ -1215,9 +1213,7 @@ function handlePickerKey(e) {
             const cmd = COMMANDS[S.cmdFocus];
             S.pendingCmd = cmd.id;
 
-            if (cmd.id === 'clear') {
-                replaceUndefinedItem({ type: 'clear', label: '⊘ Clear queue' });
-            } else if (cmd.id === 'loop') {
+            if (cmd.id === 'loop') {
                 S.zone     = 'cmdconfig';
                 S.loopFocus = 'value';
                 renderAll();
@@ -1490,7 +1486,7 @@ pub fn render_browse_page(
                 <div class="player-placeholder" id="player-placeholder">"Sapling"</div>
             </div>
             <div id="tv-player-bar" class="player-bar">
-                <span class="player-hint">"Nothing playing &nbsp; ↓=queue"</span>
+                <span class="player-hint">"Nothing playing  ·  ↓ = queue"</span>
             </div>
         </section>
 
@@ -1498,7 +1494,7 @@ pub fn render_browse_page(
         <section id="tv-queue" class="tv-queue">
             <div class="tv-queue-header">"Queue"</div>
             <div class="tv-queue-rows"></div>
-            <div class="queue-hint">"↑↓ navigate &nbsp;·&nbsp; → insert item after &nbsp;·&nbsp; ← delete item &nbsp;·&nbsp; Enter play/configure"</div>
+            <div class="queue-hint">"↑↓ navigate  ·  → insert item after  ·  ← delete item  ·  Enter play / configure"</div>
         </section>
     })
 }
