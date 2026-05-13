@@ -1,6 +1,7 @@
 use std::path::{Component, Path, PathBuf};
 
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+use serde::Serialize;
 
 use crate::thumbnail;
 
@@ -318,4 +319,52 @@ fn classify_playable_file(path: &Path) -> Option<PlayableKind> {
 
 fn directory_is_empty(path: &Path) -> std::io::Result<bool> {
     Ok(std::fs::read_dir(path)?.next().is_none())
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ApiItem {
+    pub item_type: &'static str,
+    pub url: String,
+    pub label: String,
+    pub path: String,
+}
+
+pub fn list_directory(
+    media_root: &Path,
+    relative_raw: &str,
+) -> Result<Vec<ApiItem>, ResolveError> {
+    let (absolute, relative) = resolve_directory(media_root, relative_raw)?;
+    let (folders, videos, audio_files) =
+        scan_directory(media_root, &absolute, &relative).map_err(|_| ResolveError::NotFound)?;
+
+    let mut items = Vec::new();
+
+    for folder in &folders {
+        items.push(ApiItem {
+            item_type: "folder",
+            url: format!("/browse/{}", encode_url_path(&folder.relative_path)),
+            label: folder.name.clone(),
+            path: folder.relative_path.to_string_lossy().to_string(),
+        });
+    }
+
+    for video in &videos {
+        items.push(ApiItem {
+            item_type: "video",
+            url: format!("/media/{}", encode_url_path(&video.relative_path)),
+            label: video.name.clone(),
+            path: video.relative_path.to_string_lossy().to_string(),
+        });
+    }
+
+    for audio in &audio_files {
+        items.push(ApiItem {
+            item_type: "audio",
+            url: format!("/media/{}", encode_url_path(&audio.relative_path)),
+            label: audio.name.clone(),
+            path: audio.relative_path.to_string_lossy().to_string(),
+        });
+    }
+
+    Ok(items)
 }

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::response::{Html, IntoResponse, Json, Redirect, Response};
 use axum::routing::get;
 use axum::Router;
 use clap::Parser;
@@ -16,9 +16,9 @@ use serde::Deserialize;
 use tower_http::services::ServeDir;
 
 use crate::media::{
-    encode_url_path, format_breadcrumbs, playable_kind_for_path, resolve_directory,
-    resolve_playable_file, resolve_video_file, scan_directory, search_paths, PlayableKind,
-    ResolveError,
+    encode_url_path, format_breadcrumbs, list_directory, playable_kind_for_path,
+    resolve_directory, resolve_playable_file, resolve_video_file, scan_directory, search_paths,
+    PlayableKind, ResolveError,
 };
 use crate::thumbnail::get_or_generate_thumbnail_path_for_video;
 
@@ -44,6 +44,11 @@ struct BrowseQuery {
     q: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+struct ListQuery {
+    path: Option<String>,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -64,6 +69,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/browse/{*path}", get(browse))
         .route("/play/{*path}", get(play))
         .route("/thumb/video/{*path}", get(video_thumbnail))
+        .route("/api/list", get(api_list))
         .nest_service("/media", media_service)
         .with_state(state);
 
@@ -185,6 +191,20 @@ async fn play(State(state): State<AppState>, Path(path): Path<String>) -> Respon
     };
 
     (StatusCode::OK, Html(html)).into_response()
+}
+
+async fn api_list(
+    State(state): State<AppState>,
+    Query(query): Query<ListQuery>,
+) -> Response {
+    let path = query.path.as_deref().unwrap_or("");
+    match list_directory(state.media_root.as_ref(), path) {
+        Ok(items) => (StatusCode::OK, Json(items)).into_response(),
+        Err(ResolveError::PathTraversal) => {
+            (StatusCode::BAD_REQUEST, "Invalid path.").into_response()
+        }
+        Err(_) => (StatusCode::NOT_FOUND, "Path not found.").into_response(),
+    }
 }
 
 fn render_path_error(err: ResolveError) -> Response {
