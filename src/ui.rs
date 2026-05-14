@@ -129,11 +129,23 @@ a { color: inherit; text-decoration: none; }
     align-items: center;
     gap: 1rem;
     padding: 0.5rem 1rem;
-    background: rgba(0,0,0,0.7);
+    background: #000;
     border-top: 1px solid var(--line);
     font-size: 0.82rem;
     color: var(--muted);
     min-height: 2.4rem;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    opacity: 1;
+    transition: opacity 0.4s ease;
+    z-index: 10;
+}
+
+.player-bar--hidden {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .player-bar-title {
@@ -143,6 +155,14 @@ a { color: inherit; text-decoration: none; }
     text-overflow: ellipsis;
     color: var(--ink);
     font-weight: 600;
+}
+
+.player-time {
+    font-size: 0.82rem;
+    font-family: monospace;
+    color: var(--muted);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .player-hint {
@@ -641,16 +661,53 @@ function queueItemLabel(item) {
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 // ── Render: Player ─────────────────────────────────────────────────────────
+let playerBarHideTimer = null;
+
+function scheduleBarHide() {
+    clearTimeout(playerBarHideTimer);
+    playerBarHideTimer = setTimeout(() => {
+        const el = currentMediaEl();
+        if (el && !el.paused) {
+            elPlayerBar.classList.add('player-bar--hidden');
+        }
+    }, 10000);
+}
+
+function showBar() {
+    elPlayerBar.classList.remove('player-bar--hidden');
+}
+
+function showBarAndScheduleHide() {
+    showBar();
+    const el = currentMediaEl();
+    if (el && !el.paused) scheduleBarHide();
+}
+
+function formatTime(sec) {
+    if (!isFinite(sec) || isNaN(sec)) return '--:--';
+    sec = Math.floor(sec);
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    const mm = String(m).padStart(h > 0 ? 2 : 1, '0');
+    const ss = String(s).padStart(2, '0');
+    return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
 function renderPlayer() {
     // media element managed by playMedia / closeMedia — only update bar
     const item = S.currentPlaying >= 0 ? S.queue[S.currentPlaying] : null;
     if (item) {
+        const el = currentMediaEl();
+        const cur = el ? formatTime(el.currentTime) : '--:--';
+        const dur = el ? formatTime(el.duration) : '--:--';
         elPlayerBar.innerHTML = `
+            <span class="player-time" id="player-time">${cur} of ${dur}</span>
             <span class="player-bar-title">${esc(item.label)}</span>
-            <span class="player-hint">Enter=play/pause &nbsp; ◀▶=seek 10s &nbsp; ↓=queue</span>
+            <span class="player-hint">Enter=play/pause  ·  ◀▶=seek 10s  ·  ↓=queue</span>
         `;
     } else {
-        elPlayerBar.innerHTML = `<span class="player-hint">Nothing playing &nbsp; ↓=queue</span>`;
+        elPlayerBar.innerHTML = `<span class="player-hint">Nothing playing  ·  ↓=queue</span>`;
     }
 }
 
@@ -898,14 +955,26 @@ function playMedia(url, label) {
         executeNext();
     });
 
+    el.addEventListener('play', () => {
+        showBarAndScheduleHide();
+    });
+
+    el.addEventListener('pause', () => {
+        clearTimeout(playerBarHideTimer);
+        showBar();
+    });
+
     elMedia.innerHTML = '';
     elMedia.appendChild(el);
 
     document.getElementById('player-placeholder')?.remove();
     renderPlayer();
+    showBarAndScheduleHide();
 }
 
 function closeMedia() {
+    clearTimeout(playerBarHideTimer);
+    showBar();
     const el = elMedia.querySelector('video, audio');
     if (el) { el.pause(); el.src = ''; }
     elMedia.innerHTML = '<div class="player-placeholder" id="player-placeholder">Sapling</div>';
@@ -1065,6 +1134,7 @@ document.addEventListener('keydown', e => {
 });
 
 function handlePlayerKey(e) {
+    showBarAndScheduleHide();
     const el = currentMediaEl();
     switch (e.key) {
         case 'ArrowDown':
@@ -1405,6 +1475,15 @@ function handleBrowserKey(e) {
 S.zone       = 'queue';
 S.queueFocus = 0;
 renderAll();
+
+// tick the player time display every 500ms without a full re-render
+setInterval(() => {
+    const timeEl = document.getElementById('player-time');
+    if (!timeEl) return;
+    const el = currentMediaEl();
+    if (!el) return;
+    timeEl.textContent = `${formatTime(el.currentTime)} of ${formatTime(el.duration)}`;
+}, 500);
 
 // restore playing state — if queue has a currentPlaying stored we can't
 // auto-resume (media src is gone), so just reset
