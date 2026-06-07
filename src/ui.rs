@@ -57,7 +57,7 @@ const TV_STYLE: &str = r#"
     --playing:    #22c55e;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 html, body {
     margin: 0;
@@ -66,6 +66,7 @@ html, body {
     color: var(--ink);
     font-family: "Inter", system-ui, sans-serif;
     font-size: 16px;
+    overscroll-behavior: none;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -85,9 +86,7 @@ a { color: inherit; text-decoration: none; }
 
 /* ── Zone 1: Player ────────────────────────────────────── */
 .tv-player {
-    position: relative;
     width: 100%;
-    height: 100vh;
     background: #000;
     display: flex;
     flex-direction: column;
@@ -95,10 +94,18 @@ a { color: inherit; text-decoration: none; }
     justify-content: center;
 }
 
+#tv-media {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
 .tv-player video,
 .tv-player audio {
     width: 100%;
-    height: calc(100vh - 2.4rem);
+    height: auto;
+    max-height: 100vh;
     object-fit: contain;
     display: block;
     background: #000;
@@ -134,18 +141,6 @@ a { color: inherit; text-decoration: none; }
     font-size: 0.82rem;
     color: var(--muted);
     min-height: 2.4rem;
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    opacity: 1;
-    transition: opacity 0.4s ease;
-    z-index: 10;
-}
-
-.player-bar--hidden {
-    opacity: 0;
-    pointer-events: none;
 }
 
 .player-bar-title {
@@ -178,6 +173,8 @@ a { color: inherit; text-decoration: none; }
 }
 
 .tv-queue-header {
+    display: flex;
+    align-items: center;
     padding: 0.6rem 1rem;
     font-size: 0.75rem;
     font-weight: 700;
@@ -185,7 +182,21 @@ a { color: inherit; text-decoration: none; }
     letter-spacing: 0.1em;
     color: var(--muted);
     border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
+.tv-queue-header::after {
+    content: "+";
+    margin-left: auto;
+    color: var(--accent);
+    font-weight: 400;
+    font-size: 1rem;
+}
+.tv-queue-header:hover { color: var(--ink); }
+.tv-queue-header:hover::after { color: var(--focus); }
+.tv-queue-header:active { color: var(--ink); }
+.tv-queue-header:active::after { color: var(--ink); }
 
 .queue-row {
     display: flex;
@@ -196,6 +207,7 @@ a { color: inherit; text-decoration: none; }
     font-size: 0.95rem;
     cursor: default;
     user-select: none;
+    touch-action: pan-y;
 }
 
 .queue-row:last-child {
@@ -249,6 +261,24 @@ a { color: inherit; text-decoration: none; }
     font-style: italic;
 }
 
+.queue-row-play {
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1.1rem;
+    padding: 0.5rem;
+    flex-shrink: 0;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+.queue-row-play:hover { color: var(--accent); }
+.queue-row-play:active { color: var(--focus); }
+.queue-row.is-playing .queue-row-play {
+    color: var(--playing);
+}
+
 .queue-empty-hint {
     padding: 1rem;
     color: var(--muted);
@@ -297,10 +327,13 @@ a { color: inherit; text-decoration: none; }
     color: var(--ink);
     font: inherit;
     font-size: 0.9rem;
-    cursor: default;
+    cursor: pointer;
     user-select: none;
     border-radius: 2px;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
 }
+.cmd-option:hover { border-color: var(--accent-dim); }
 
 .cmd-option.is-focused {
     border-color: var(--focus);
@@ -382,6 +415,11 @@ a { color: inherit; text-decoration: none; }
 .browser-breadcrumb span {
     color: var(--muted);
 }
+.breadcrumb-segment {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.breadcrumb-segment:hover { color: var(--focus); }
 
 .browser-select-row {
     display: flex;
@@ -393,9 +431,11 @@ a { color: inherit; text-decoration: none; }
     font-size: 0.92rem;
     font-weight: 600;
     color: var(--accent);
-    cursor: default;
+    cursor: pointer;
     user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
+.browser-select-row:hover { background: var(--panel); }
 
 .browser-select-row.is-focused {
     outline: 2px solid var(--focus);
@@ -415,9 +455,11 @@ a { color: inherit; text-decoration: none; }
     flex-direction: column;
     background: var(--panel);
     overflow: hidden;
-    cursor: default;
+    cursor: pointer;
     user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
+.browser-card:hover { background: var(--panel2); }
 
 .browser-card.is-focused {
     outline: 3px solid var(--focus);
@@ -484,7 +526,14 @@ a { color: inherit; text-decoration: none; }
     color: var(--ink);
     min-width: 6rem;
     text-align: center;
+    background: transparent;
+    border: 2px solid var(--line);
+    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+    width: 8rem;
+    font-family: inherit;
 }
+.loop-picker-value:focus { outline: none; border-color: var(--focus); }
 
 .loop-picker-hint {
     font-size: 0.78rem;
@@ -503,9 +552,12 @@ a { color: inherit; text-decoration: none; }
     color: var(--ink);
     font: inherit;
     font-size: 0.9rem;
-    cursor: default;
+    cursor: pointer;
     user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
 }
+.loop-btn:hover { border-color: var(--accent-dim); }
 
 .loop-btn.is-focused {
     border-color: var(--focus);
@@ -525,6 +577,16 @@ a { color: inherit; text-decoration: none; }
     }
     .cmd-options {
         flex-direction: column;
+    }
+    .queue-row {
+        padding: 0.8rem 1rem;
+    }
+    .cmd-option {
+        padding: 0.9rem 1.4rem;
+    }
+    .queue-hint {
+        font-size: 0.78rem;
+        padding: 0.5rem 1rem;
     }
 }
 "#;
@@ -602,11 +664,9 @@ const S = {
     browser: {
         path:         '',
         items:        [],
-        focus:        0,         // 0 = search bar, 1+ = grid item (1-indexed)
+        focus:        0,         // 0 = search bar, -N = select row N (1-indexed), 1+ = grid item
         searchQuery:  '',
-        selectRowVisible: false, // show "select N files" row
-        selectRowLabel:   '',
-        selectRowValue:   null,  // the item to confirm on select-row enter
+        selectRows:   [],        // [{ label, filter }] shown above the grid for play_folder
     },
     // loop picker sub-state
     loopCount:        3,         // 0 = infinite
@@ -630,6 +690,98 @@ const elConfig    = document.getElementById('tv-cmdconfig');
 const elMedia     = document.getElementById('tv-media');
 const elPlayerBar = document.getElementById('tv-player-bar');
 
+// ── Click handlers ─────────────────────────────────────────────────────────
+elQueue.querySelector('.tv-queue-header').addEventListener('click', () => {
+    insertUndefinedAt(S.queue.length);
+});
+
+elQueue.querySelector('.tv-queue-rows').addEventListener('click', e => {
+    const btn = e.target.closest('.queue-row-play');
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.idx);
+    const item = S.queue[idx];
+    if (!item) return;
+    if (item.type === 'undefined') {
+        S.pendingIdx = idx;
+        S.zone = 'cmdpicker';
+        S.cmdFocus = 0;
+        renderAll();
+        elPicker.scrollIntoView({ block: 'nearest' });
+    } else {
+        S.currentPlaying = idx;
+        executeNext();
+    }
+});
+
+elPicker.querySelector('.cmd-options').addEventListener('click', e => {
+    const opt = e.target.closest('.cmd-option');
+    if (!opt) return;
+    const idx = parseInt(opt.dataset.idx);
+    S.cmdFocus = idx;
+    const cmd = COMMANDS[idx];
+    S.pendingCmd = cmd.id;
+    if (cmd.id === 'loop') {
+        S.zone = 'cmdconfig';
+        S.loopFocus = 'value';
+        renderAll();
+        elConfig.scrollIntoView({ block: 'nearest' });
+    } else {
+        S.browser.path = '';
+        S.browser.items = [];
+        S.browser.focus = 1;
+        S.browser.searchQuery = '';
+        S.zone = 'cmdconfig';
+        renderAll();
+        elConfig.scrollIntoView({ block: 'nearest' });
+        fetchBrowser('', '');
+    }
+});
+
+elConfig.addEventListener('click', e => {
+    const loopBtn = e.target.closest('.loop-btn');
+    if (loopBtn) {
+        if (loopBtn.id === 'loop-cancel') {
+            cancelConfig();
+        } else {
+            const n = S.loopCount;
+            const lbl = n === 0 ? '↺ Loop ∞' : `↺ Loop ×${n}`;
+            replaceUndefinedItem({ type: 'loop', label: lbl, loopCount: n });
+        }
+        return;
+    }
+    const card = e.target.closest('.browser-card');
+    if (card) {
+        const idx = parseInt(card.dataset.idx);
+        const b = S.browser;
+        const item = b.items[idx];
+        if (!item) return;
+        if (item.item_type === 'folder') {
+            b.path = item.path;
+            b.focus = b.selectRows.length > 0 ? -1 : 1;
+            b.searchQuery = '';
+            fetchBrowser(item.path, '');
+        } else if (S.pendingCmd === 'play_file') {
+            confirmBrowserSelection(item);
+        }
+        return;
+    }
+    const seg = e.target.closest('.breadcrumb-segment');
+    if (seg) {
+        const path = seg.dataset.path;
+        S.browser.path = path;
+        S.browser.focus = S.browser.selectRows.length > 0 ? -1 : 1;
+        S.browser.searchQuery = '';
+        fetchBrowser(path, '');
+        return;
+    }
+    const row = e.target.closest('.browser-select-row');
+    if (row) {
+        const rowIdx = parseInt(row.dataset.selectIdx);
+        confirmSelectRow(rowIdx);
+        return;
+    }
+});
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 function mediaTypeFromUrl(url) {
     const ext = url.split('.').pop().split('?')[0].toLowerCase();
@@ -647,7 +799,6 @@ function esc(s) {
 function itemTypeLabel(type) {
     switch (type) {
         case 'play_file':      return 'FILE';
-        case 'play_folder':    return 'FOLDER';
         case 'random_folder':  return '🎲 RANDOM';
         case 'loop':           return '↺ LOOP';
         default:               return type.toUpperCase();
@@ -661,27 +812,6 @@ function queueItemLabel(item) {
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 // ── Render: Player ─────────────────────────────────────────────────────────
-let playerBarHideTimer = null;
-
-function scheduleBarHide() {
-    clearTimeout(playerBarHideTimer);
-    playerBarHideTimer = setTimeout(() => {
-        const el = currentMediaEl();
-        if (el && !el.paused) {
-            elPlayerBar.classList.add('player-bar--hidden');
-        }
-    }, 10000);
-}
-
-function showBar() {
-    elPlayerBar.classList.remove('player-bar--hidden');
-}
-
-function showBarAndScheduleHide() {
-    showBar();
-    const el = currentMediaEl();
-    if (el && !el.paused) scheduleBarHide();
-}
 
 function formatTime(sec) {
     if (!isFinite(sec) || isNaN(sec)) return '--:--';
@@ -714,7 +844,7 @@ function renderPlayer() {
 // ── Render: Queue ──────────────────────────────────────────────────────────
 function renderQueue() {
     const rows = S.queue.length === 0
-        ? `<div class="queue-empty-hint">Queue is empty — press ▶ on a focused row to start, ▶ to add an item</div>`
+        ? `<div class="queue-empty-hint">Queue is empty — tap Queue header above to add an item</div>`
         : S.queue.map((item, idx) => {
             const focused  = idx === S.queueFocus && S.zone === 'queue' ? ' is-focused' : '';
             const playing  = idx === S.currentPlaying ? ' is-playing' : '';
@@ -722,11 +852,15 @@ function renderQueue() {
             const badge    = item.type === 'undefined'
                 ? `<span class="queue-row-badge">— select —</span>`
                 : `<span class="queue-row-badge${idx === S.currentPlaying ? ' badge-playing' : ''}">${itemTypeLabel(item.type)}</span>`;
+            const playBtn  = item.type === 'undefined'
+                ? `<button class="queue-row-play" data-idx="${idx}">✎</button>`
+                : `<button class="queue-row-play" data-idx="${idx}">▶</button>`;
             return `
             <div class="queue-row${focused}${playing}${undef}" data-idx="${idx}">
                 <span class="queue-row-num">${idx + 1}</span>
                 <span class="queue-row-label">${esc(queueItemLabel(item))}</span>
                 ${badge}
+                ${playBtn}
             </div>`;
         }).join('');
 
@@ -763,15 +897,15 @@ function renderCmdConfig() {
 }
 
 function renderLoopPicker() {
-    const val  = S.loopCount === 0 ? '∞' : String(S.loopCount);
-    const hint = S.loopCount === 0 ? 'Loops forever' : `Loops ${S.loopCount} time${S.loopCount === 1 ? '' : 's'}`;
+    const val  = S.loopCount === 0 ? 0 : S.loopCount;
+    const hint = val === 0 ? 'Loops forever' : `Loops ${val} time${val === 1 ? '' : 's'}`;
     const confirmFocused = S.loopFocus === 'confirm' ? ' is-focused' : '';
     const cancelFocused  = S.loopFocus === 'cancel'  ? ' is-focused' : '';
 
     elConfig.querySelector('.tv-cmdconfig-body').innerHTML = `
         <div class="loop-picker">
             <div class="loop-picker-label">Loop how many times? (0 = forever)</div>
-            <div class="loop-picker-value">${val}</div>
+            <input type="number" min="0" step="1" value="${val}" class="loop-picker-value" id="loop-count-input">
             <div class="loop-picker-hint">${hint}</div>
             <div class="loop-picker-actions">
                 <div class="loop-btn${confirmFocused}" id="loop-confirm">Confirm</div>
@@ -779,6 +913,28 @@ function renderLoopPicker() {
             </div>
         </div>
     `;
+
+    const inp = document.getElementById('loop-count-input');
+    if (inp) {
+        if (S.loopFocus === 'value') inp.focus();
+        inp.addEventListener('input', () => {
+            S.loopCount = Math.max(0, parseInt(inp.value) || 0);
+            renderCmdConfig();
+        });
+        inp.addEventListener('keydown', e => {
+            if (e.key === 'ArrowDown') {
+                e.stopPropagation();
+                return;
+            }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                const n = S.loopCount;
+                const lbl = n === 0 ? '↺ Loop ∞' : `↺ Loop ×${n}`;
+                replaceUndefinedItem({ type: 'loop', label: lbl, loopCount: n });
+            }
+        });
+    }
 }
 
 function renderBrowser() {
@@ -787,16 +943,16 @@ function renderBrowser() {
 
     const searchFocused = b.focus === 0 ? ' is-focused' : '';
 
-    let selectRowHtml = '';
-    if (b.selectRowVisible) {
-        const sf = b.focus === -1 ? ' is-focused' : '';
-        selectRowHtml = `<div class="browser-select-row${sf}" id="browser-select-row">${esc(b.selectRowLabel)}</div>`;
-    }
+    const selectRowsHtml = b.selectRows.map((row, i) => {
+        const focusIdx = -(i + 1);
+        const sf = b.focus === focusIdx ? ' is-focused' : '';
+        return `<div class="browser-select-row${sf}" data-select-idx="${i}">${esc(row.label)}</div>`;
+    }).join('');
 
     const gridHtml = b.items.length === 0
         ? '<div class="helper">No items here.</div>'
         : b.items.map((item, idx) => {
-            // focus index: 0 = search, -1 = select row, 1..N = grid items
+            // focus index: 0 = search, -N = select row N, 1..N = grid items
             const fi = idx + 1;
             const focused = b.focus === fi ? ' is-focused' : '';
             const thumbHtml = item.thumbnail_url
@@ -819,7 +975,7 @@ function renderBrowser() {
                    type="search" placeholder="Search…" value="${esc(b.searchQuery)}">
         </div>
         <div class="browser-breadcrumb">${crumbHtml}</div>
-        ${selectRowHtml}
+        ${selectRowsHtml}
         <div class="browser-grid" id="browser-grid">${gridHtml}</div>
     `;
 
@@ -834,7 +990,7 @@ function renderBrowser() {
         inp.addEventListener('keydown', e => {
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                S.browser.focus = b.selectRowVisible ? -1 : 1;
+                S.browser.focus = b.selectRows.length > 0 ? -1 : 1;
                 renderCmdConfig();
             }
             if (e.key === 'Escape') {
@@ -855,11 +1011,11 @@ function renderBrowser() {
 
 function buildBreadcrumbHtml(path) {
     const parts = path ? path.split('/').filter(Boolean) : [];
-    let html = `<span>Root</span>`;
+    let html = `<span class="breadcrumb-segment" data-path="">Root</span>`;
     let running = '';
     for (const part of parts) {
         running += (running ? '/' : '') + part;
-        html += ` <span>/</span> <span>${esc(part)}</span>`;
+        html += ` <span>/</span> <span class="breadcrumb-segment" data-path="${esc(running)}">${esc(part)}</span>`;
     }
     return html;
 }
@@ -899,7 +1055,7 @@ function executeNext() {
     renderQueue();
     const item = S.queue[S.currentPlaying];
 
-    if (item.type === 'play_file' || item.type === 'play_folder') {
+    if (item.type === 'play_file') {
         playMedia(item.url, item.label);
     } else if (item.type === 'random_folder') {
         fetchRandom(item.path).then(resolved => {
@@ -944,7 +1100,7 @@ async function fetchRandom(path) {
 function playMedia(url, label) {
     const type = mediaTypeFromUrl(url);
     const el = document.createElement(type);
-    el.controls = false; // we handle keys
+    el.controls = true;
     el.autoplay = true;
     el.preload  = 'auto';
     el.src = url;
@@ -955,26 +1111,14 @@ function playMedia(url, label) {
         executeNext();
     });
 
-    el.addEventListener('play', () => {
-        showBarAndScheduleHide();
-    });
-
-    el.addEventListener('pause', () => {
-        clearTimeout(playerBarHideTimer);
-        showBar();
-    });
-
     elMedia.innerHTML = '';
     elMedia.appendChild(el);
 
     document.getElementById('player-placeholder')?.remove();
     renderPlayer();
-    showBarAndScheduleHide();
 }
 
 function closeMedia() {
-    clearTimeout(playerBarHideTimer);
-    showBar();
     const el = elMedia.querySelector('video, audio');
     if (el) { el.pause(); el.src = ''; }
     elMedia.innerHTML = '<div class="player-placeholder" id="player-placeholder">Sapling</div>';
@@ -993,10 +1137,15 @@ async function fetchBrowser(path, query) {
         const r = await fetch(url);
         if (!r.ok) return;
         const items = await r.json();
-        // Augment with thumbnail_url for video items
         S.browser.items = items;
         S.browser.path  = path || '';
         updateSelectRow();
+        // default focus to first select row if available, else first grid item
+        if (S.browser.selectRows.length > 0) {
+            S.browser.focus = -1;
+        } else if (S.browser.focus < 0) {
+            S.browser.focus = 1;
+        }
         renderCmdConfig();
     } catch {}
 }
@@ -1004,21 +1153,22 @@ async function fetchBrowser(path, query) {
 function updateSelectRow() {
     const b = S.browser;
     const cmd = S.pendingCmd;
-    if (cmd === 'play_folder' || cmd === 'random_folder') {
-        const videos = b.items.filter(i => i.item_type === 'video').length;
-        const audios = b.items.filter(i => i.item_type === 'audio').length;
-        const parts = [];
-        if (videos > 0) parts.push(`Select ${videos} video file${videos !== 1 ? 's' : ''} from this folder`);
-        if (audios > 0) parts.push(`Select ${audios} audio file${audios !== 1 ? 's' : ''} from this folder`);
-        if (parts.length > 0) {
-            b.selectRowVisible = true;
-            b.selectRowLabel   = parts.join(' / ');
-            b.selectRowValue   = { path: b.path };
-        } else {
-            b.selectRowVisible = false;
-        }
+    if (cmd === 'play_folder') {
+        const all    = b.items.filter(i => i.item_type === 'video' || i.item_type === 'audio');
+        const videos = b.items.filter(i => i.item_type === 'video');
+        const audios = b.items.filter(i => i.item_type === 'audio');
+        const rows = [];
+        if (all.length > 0)    rows.push({ label: `📂 All files from this folder (${all.length})`,         filter: 'all'   });
+        if (videos.length > 0) rows.push({ label: `🎬 All video files from this folder (${videos.length})`, filter: 'video' });
+        if (audios.length > 0) rows.push({ label: `🎵 All audio files from this folder (${audios.length})`, filter: 'audio' });
+        b.selectRows = rows;
+    } else if (cmd === 'random_folder') {
+        const all = b.items.filter(i => i.item_type === 'video' || i.item_type === 'audio');
+        b.selectRows = all.length > 0
+            ? [{ label: `🎲 Random from this folder`, filter: 'all' }]
+            : [];
     } else {
-        b.selectRowVisible = false;
+        b.selectRows = [];
     }
 }
 
@@ -1028,8 +1178,6 @@ function confirmBrowserSelection(item) {
 
     if (S.pendingCmd === 'play_file') {
         queueItem = { type: 'play_file', url: item.url, label: item.label };
-    } else if (S.pendingCmd === 'play_folder') {
-        queueItem = { type: 'play_folder', url: item.url, label: item.label, path: item.path };
     } else if (S.pendingCmd === 'random_folder') {
         queueItem = { type: 'random_folder', path: item.path, label: '🎲 ' + item.label };
     }
@@ -1038,17 +1186,36 @@ function confirmBrowserSelection(item) {
     replaceUndefinedItem(queueItem);
 }
 
-function confirmSelectRow() {
+function confirmSelectRow(rowIdx) {
     const b = S.browser;
-    let queueItem = null;
+    const row = b.selectRows[rowIdx];
+    if (!row) return;
 
     if (S.pendingCmd === 'play_folder') {
-        queueItem = { type: 'play_folder', path: b.path, label: '📂 ' + (b.path.split('/').pop() || 'Root') };
-    } else if (S.pendingCmd === 'random_folder') {
-        queueItem = { type: 'random_folder', path: b.path, label: '🎲 ' + (b.path.split('/').pop() || 'Root') };
-    }
+        let files = b.items.filter(i => i.item_type === 'video' || i.item_type === 'audio');
+        if (row.filter === 'video') files = files.filter(i => i.item_type === 'video');
+        if (row.filter === 'audio') files = files.filter(i => i.item_type === 'audio');
+        if (files.length === 0) return;
 
-    if (queueItem) replaceUndefinedItem(queueItem);
+        const newItems = files.map(f => ({ type: 'play_file', url: f.url, label: f.label }));
+        // replace the [undefined] slot with first item, insert rest after
+        if (S.pendingIdx >= 0 && S.pendingIdx < S.queue.length) {
+            S.queue.splice(S.pendingIdx, 1, ...newItems);
+        } else {
+            S.queue.push(...newItems);
+            S.pendingIdx = S.queue.length - newItems.length;
+        }
+        saveQueue();
+        S.pendingCmd = null;
+        S.zone = 'queue';
+        S.queueFocus = S.pendingIdx;
+        elConfig.classList.remove('is-visible');
+        elPicker.classList.remove('is-visible');
+        renderAll();
+    } else if (S.pendingCmd === 'random_folder') {
+        const queueItem = { type: 'random_folder', path: b.path, label: '🎲 ' + (b.path.split('/').pop() || 'Root') };
+        replaceUndefinedItem(queueItem);
+    }
 }
 
 function replaceUndefinedItem(queueItem) {
@@ -1134,7 +1301,6 @@ document.addEventListener('keydown', e => {
 });
 
 function handlePlayerKey(e) {
-    showBarAndScheduleHide();
     const el = currentMediaEl();
     switch (e.key) {
         case 'ArrowDown':
@@ -1169,6 +1335,8 @@ function handleQueueKey(e) {
                 S.zone = 'player';
                 renderAll();
                 window.scrollTo({ top: 0, behavior: 'smooth' });
+                const mediaEl = currentMediaEl();
+                if (mediaEl) mediaEl.focus();
             } else {
                 S.queueFocus--;
                 renderQueue();
@@ -1370,6 +1538,11 @@ function handleLoopKey(e) {
 function handleBrowserKey(e) {
     const b   = S.browser;
     const len = b.items.length;
+    const nsr = b.selectRows.length; // number of select rows
+
+    // helper: is focus on a select row?
+    const isSelectRow = f => f < 0 && f >= -nsr;
+    // select row focus: -1 = first, -2 = second, -3 = third
 
     // if search input is focused, let it handle typing; intercept only nav keys
     if (b.focus === 0) return; // handled by inline listener in renderBrowser
@@ -1377,18 +1550,21 @@ function handleBrowserKey(e) {
     switch (e.key) {
         case 'ArrowUp': {
             e.preventDefault();
-            if (b.focus === -1) {
-                // select row → first grid item
-                b.focus = 1;
+            if (isSelectRow(b.focus)) {
+                // move up through select rows, then to search
+                if (b.focus < -1) {
+                    b.focus++;
+                } else {
+                    b.focus = 0;
+                }
             } else if (b.focus === 1) {
-                // top of grid → search bar
-                b.focus = 0;
+                // top of grid → last select row or search
+                b.focus = nsr > 0 ? -nsr : 0;
             } else {
                 const nf = gridNeighbor('up', b.focus, b.items);
-                b.focus = nf === b.focus ? 0 : nf;
+                b.focus = nf === b.focus ? (nsr > 0 ? -nsr : 0) : nf;
             }
             if (b.focus === 0) {
-                // focus the actual input
                 renderCmdConfig();
                 document.getElementById('browser-search')?.focus();
                 return;
@@ -1398,8 +1574,13 @@ function handleBrowserKey(e) {
         }
         case 'ArrowDown': {
             e.preventDefault();
-            if (b.focus === -1) {
-                b.focus = 1;
+            if (isSelectRow(b.focus)) {
+                // move down through select rows, then to first grid item
+                if (b.focus < -1) {
+                    b.focus++;
+                } else {
+                    b.focus = 1;
+                }
             } else {
                 const nf = gridNeighbor('down', b.focus, b.items);
                 b.focus = nf;
@@ -1411,7 +1592,7 @@ function handleBrowserKey(e) {
             e.preventDefault();
             if (b.focus > 1) {
                 b.focus--;
-            } else if (b.focus === 1 && b.selectRowVisible) {
+            } else if (b.focus === 1 && nsr > 0) {
                 b.focus = -1;
             }
             renderCmdConfig();
@@ -1421,7 +1602,7 @@ function handleBrowserKey(e) {
             e.preventDefault();
             if (b.focus < len) {
                 b.focus++;
-            } else if (b.focus === -1) {
+            } else if (isSelectRow(b.focus)) {
                 b.focus = 1;
             }
             renderCmdConfig();
@@ -1429,9 +1610,9 @@ function handleBrowserKey(e) {
         }
         case 'Enter': {
             e.preventDefault();
-            if (b.focus === -1) {
-                // select row confirmed
-                confirmSelectRow();
+            if (isSelectRow(b.focus)) {
+                const rowIdx = (-b.focus) - 1;
+                confirmSelectRow(rowIdx);
                 return;
             }
             const item = b.items[b.focus - 1];
@@ -1439,7 +1620,7 @@ function handleBrowserKey(e) {
             if (item.item_type === 'folder') {
                 // navigate into folder
                 b.path        = item.path;
-                b.focus       = b.selectRowVisible ? -1 : 1;
+                b.focus       = nsr > 0 ? -1 : 1;
                 b.searchQuery = '';
                 fetchBrowser(item.path, '');
             } else {
@@ -1573,7 +1754,7 @@ pub fn render_browse_page(
         <section id="tv-queue" class="tv-queue">
             <div class="tv-queue-header">"Queue"</div>
             <div class="tv-queue-rows"></div>
-            <div class="queue-hint">"↑↓ navigate  ·  → insert item after  ·  ← delete item  ·  Enter play / configure"</div>
+            <div class="queue-hint">"Tap ▶ to play  ·  header + to add  ·  ✎ to configure"</div>
         </section>
     })
 }
